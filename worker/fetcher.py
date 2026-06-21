@@ -1,5 +1,6 @@
 import os
 import time
+import requests
 from datetime import date, datetime, timedelta
 
 from comicgeeks import Comic_Geeks
@@ -7,6 +8,31 @@ from comicgeeks.extract import extract as parse_title
 
 WINDOW_MONTHS = 3
 REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
+
+
+class _LoCGClient(Comic_Geeks):
+    """Omite la validación de sesión con la home page de LoCG.
+
+    comicgeeks verifica la cookie haciendo GET a leagueofcomicgeeks.com,
+    que Cloudflare bloquea desde IPs de datacenter (GitHub Actions, etc.).
+    Aquí fijamos la cookie directamente en la sesión: si es inválida,
+    fallará de forma natural en la primera llamada de datos.
+    """
+
+    def __init__(self, ci_session: str):
+        self._session = requests.Session()
+        self._session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+        })
+        self._session.authenticated = True
+        self._session.cookies.set(
+            "ci_session", ci_session,
+            domain="leagueofcomicgeeks.com", path="/",
+        )
 
 
 def _add_months(d: date, n: int) -> date:
@@ -54,7 +80,7 @@ def _cover_url(cover) -> str | None:
 
 
 def fetch_window() -> list[dict]:
-    client = Comic_Geeks(os.environ["LOCG_CI_SESSION"])
+    client = _LoCGClient(os.environ["LOCG_CI_SESSION"])
 
     seen_ids: set[int] = set()
     # cache: "series_name|publisher_name" (lowercase) → series_id from LoCG
