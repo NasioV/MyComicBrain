@@ -14,12 +14,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        # py -3.12 usa el Python Launcher de Windows para seleccionar Python 3.12
-        # (debe estar instalado en el PC con "Install for all users")
-        run: py -3.12 -m pip install -r worker/requirements.txt
+        run: C:\Users\bicho\AppData\Local\Programs\Python\Python312\python.exe -m pip install -r worker/requirements.txt
 
       - name: Run sync worker
-        run: py -3.12 worker/main.py
+        run: C:\Users\bicho\AppData\Local\Programs\Python\Python312\python.exe worker/main.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
