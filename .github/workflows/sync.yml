@@ -18,6 +18,9 @@ jobs:
           # lxml 4.9.x (requerido por comicgeeks) tiene wheel para 3.12, no para 3.13
           python-version: '3.12'
 
+      - name: Debug - runner environment
+        run: python -c "import platform, socket, urllib.request; print('OS:', platform.system(), platform.release()); print('Host:', socket.gethostname()); print('IP:', urllib.request.urlopen('https://api.ipify.org').read().decode())"
+
       - name: Install dependencies
         run: pip install -r worker/requirements.txt
 
