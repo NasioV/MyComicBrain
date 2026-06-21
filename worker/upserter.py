@@ -3,6 +3,12 @@ from datetime import date, datetime, timezone
 from supabase import Client
 
 WINDOW_MONTHS = 3
+UPSERT_BATCH = 200
+
+
+def _batch_upsert(db: Client, table: str, rows: list[dict], on_conflict: str) -> None:
+    for i in range(0, len(rows), UPSERT_BATCH):
+        db.table(table).upsert(rows[i:i + UPSERT_BATCH], on_conflict=on_conflict).execute()
 
 PUBLISHER_GROUP_MAP = {
     "DC Comics": "DC",
@@ -44,11 +50,11 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
         row["name"]: row["publisher_id"] for row in pub_result.data
     }
 
-    # 2. Series — upsert por series_id (ID de LoCG, disponible vía issue_info)
+    # 2. Series — upsert por series_id (real de LoCG o sintético negativo)
     series_seen: dict[int, dict] = {}
     for i in issues:
         sid = i["series_id"]
-        if not sid or sid in series_seen:
+        if sid is None or sid in series_seen:
             continue
         pub_id = publisher_id_map.get(i["publisher_name"])
         series_seen[sid] = {
@@ -58,12 +64,9 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
             "source": "locg",
         }
     if series_seen:
-        db.table("series").upsert(
-            list(series_seen.values()),
-            on_conflict="series_id",
-        ).execute()
+        _batch_upsert(db, "series", list(series_seen.values()), "series_id")
 
-    # 3. Releases — upsert por issue_id
+    # 3. Releases — upsert por issue_id en lotes para evitar payload excesivo
     releases = [
         {
             "issue_id": i["issue_id"],
@@ -76,10 +79,11 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
             "synced_at": synced_at,
         }
         for i in issues
-        if i["series_id"] and i["release_date"]
+        if i["series_id"] is not None and i["release_date"]
     ]
+    print(f"  Upserting {len(releases)} releases in batches of {UPSERT_BATCH}...", flush=True)
     if releases:
-        db.table("releases").upsert(releases, on_conflict="issue_id").execute()
+        _batch_upsert(db, "releases", releases, "issue_id")
 
     # 4. Poda: borrar releases fuera de la ventana ±3 meses
     today = date.today()

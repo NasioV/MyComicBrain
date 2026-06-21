@@ -1,3 +1,4 @@
+import hashlib
 import os
 import time
 import requests
@@ -9,14 +10,16 @@ from comicgeeks.extract import extract as parse_title
 WINDOW_MONTHS = 3
 REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
+# Set to None to fetch all publishers; restrict here to speed up initial testing
+ALLOWED_PUBLISHERS: frozenset[str] | None = frozenset({
+    "DC Comics",
+    "Marvel Comics",
+    "Image Comics",
+})
+
 
 class _LoCGClient(Comic_Geeks):
-    """Omite la validación de sesión con la home page de LoCG.
-
-    comicgeeks.__init__ hace un GET a leagueofcomicgeeks.com/ para verificar
-    la cookie. Aquí la fijamos directamente en la sesión y saltamos ese GET
-    innecesario. Si la cookie es inválida, fallará en la primera llamada de datos.
-    """
+    """Omite la validación de sesión con la home page de LoCG."""
 
     def __init__(self, ci_session: str):
         self._session = requests.Session()
@@ -78,25 +81,43 @@ def _cover_url(cover) -> str | None:
     return None
 
 
+def _synthetic_series_id(series_name: str, publisher_name: str) -> int:
+    """ID negativo estable para series donde no se puede obtener el ID de LoCG.
+
+    Negativo para no colisionar nunca con IDs positivos reales de LoCG.
+    Determinista: el mismo nombre+editorial siempre da el mismo ID.
+    """
+    raw = f"{series_name}|{publisher_name}".lower().encode()
+    return -(int(hashlib.sha256(raw).hexdigest(), 16) % (2 ** 52))
+
+
 def fetch_window() -> list[dict]:
     client = _LoCGClient(os.environ["LOCG_CI_SESSION"])
 
     seen_ids: set[int] = set()
-    # cache: "series_name|publisher_name" (lowercase) -> series_id from LoCG
-    series_cache: dict[str, int | None] = {}
+    series_cache: dict[str, int] = {}
     issues: list[dict] = []
 
-    for week_dt in _week_dates_in_window():
+    week_dates = _week_dates_in_window()
+    print(f"  Fetching {len(week_dates)} weeks...", flush=True)
+
+    for week_dt in week_dates:
+        print(f"  Week {week_dt.date()}...", flush=True)
         week_releases = client.new_releases(date=week_dt)
         time.sleep(REQUEST_DELAY)
 
         for issue in week_releases:
             if issue.issue_id in seen_ids:
                 continue
+
+            publisher_name = (issue.publisher or "").strip()
+
+            if ALLOWED_PUBLISHERS is not None and publisher_name not in ALLOWED_PUBLISHERS:
+                continue
+
             seen_ids.add(issue.issue_id)
 
             full_title = issue.name or ""
-            publisher_name = (issue.publisher or "").strip()
             series_name, issue_number, _ = parse_title(full_title)
             series_name = series_name.strip()
 
@@ -108,16 +129,16 @@ def fetch_window() -> list[dict]:
                     full = client.issue_info(issue.issue_id)
                     pagination = full.series_pagination
                     series_obj = pagination.get("series") if isinstance(pagination, dict) else None
-                    series_cache[cache_key] = series_obj.series_id if series_obj else None
+                    series_cache[cache_key] = series_obj.series_id if series_obj else _synthetic_series_id(series_name, publisher_name)
                     description = full.description
                 except Exception as e:
-                    print(f"  Warning: could not get series_id for '{series_name}': {e}", flush=True)
-                    series_cache[cache_key] = None
+                    print(f"  Warning: no series_id for '{series_name}' ({publisher_name}): {e}", flush=True)
+                    series_cache[cache_key] = _synthetic_series_id(series_name, publisher_name)
                 time.sleep(REQUEST_DELAY)
 
             issues.append({
                 "issue_id": issue.issue_id,
-                "series_id": series_cache.get(cache_key),
+                "series_id": series_cache[cache_key],
                 "series_name": series_name,
                 "publisher_name": publisher_name,
                 "issue_number": issue_number or "",
