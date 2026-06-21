@@ -22,3 +22,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           LOCG_CI_SESSION: ${{ secrets.LOCG_CI_SESSION }}
+          PYTHONUTF8: "1"

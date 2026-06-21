@@ -106,12 +106,12 @@ def fetch_window() -> list[dict]:
             if cache_key not in series_cache:
                 try:
                     full = client.issue_info(issue.issue_id)
-                    pagination = full.series_pagination  # triggers _get_data()
+                    pagination = full.series_pagination
                     series_obj = pagination.get("series") if isinstance(pagination, dict) else None
                     series_cache[cache_key] = series_obj.series_id if series_obj else None
                     description = full.description
                 except Exception as e:
-                    print(f"  Warning: could not get series_id for '{series_name}': {e}")
+                    print(f"  Warning: could not get series_id for '{series_name}': {e}", flush=True)
                     series_cache[cache_key] = None
                 time.sleep(REQUEST_DELAY)
 
