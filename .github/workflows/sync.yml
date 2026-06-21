@@ -13,19 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          # lxml 4.9.x (requerido por comicgeeks) tiene wheel para 3.12, no para 3.13
-          python-version: '3.12'
-
-      - name: Debug - runner environment
-        run: python -c "import platform, socket, urllib.request; print('OS:', platform.system(), platform.release()); print('Host:', socket.gethostname()); print('IP:', urllib.request.urlopen('https://api.ipify.org').read().decode())"
-
       - name: Install dependencies
-        run: pip install -r worker/requirements.txt
+        # py -3.12 usa el Python Launcher de Windows para seleccionar Python 3.12
+        # (debe estar instalado en el PC con "Install for all users")
+        run: py -3.12 -m pip install -r worker/requirements.txt
 
       - name: Run sync worker
-        run: python worker/main.py
+        run: py -3.12 worker/main.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
