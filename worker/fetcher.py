@@ -1,8 +1,8 @@
 import os
 import time
+import requests
 from datetime import date, datetime, timedelta
 
-from curl_cffi import requests as curl_requests
 from comicgeeks import Comic_Geeks
 from comicgeeks.extract import extract as parse_title
 
@@ -11,21 +11,27 @@ REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
 
 class _LoCGClient(Comic_Geeks):
-    """Usa curl-cffi con impersonación de Chrome para evitar el bloqueo de Cloudflare.
+    """Omite la validación de sesión con la home page de LoCG.
 
-    La librería requests estándar expone un fingerprint TLS que Cloudflare detecta
-    y bloquea desde IPs de datacenter (GitHub Actions). curl-cffi replica el
-    fingerprint TLS exacto de Chrome, pasando la detección desde cualquier IP.
-    También omite la validación de home page de comicgeeks (que haría un GET
-    innecesario a leagueofcomicgeeks.com/).
+    comicgeeks.__init__ hace un GET a leagueofcomicgeeks.com/ para verificar
+    la cookie. Aquí la fijamos directamente en la sesión y saltamos ese GET
+    innecesario. Si la cookie es inválida, fallará en la primera llamada de datos.
     """
 
     def __init__(self, ci_session: str):
-        self._session = curl_requests.Session(impersonate="chrome124")
+        self._session = requests.Session()
         self._session.headers.update({
-            "Cookie": f"ci_session={ci_session}",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
         })
         self._session.authenticated = True
+        self._session.cookies.set(
+            "ci_session", ci_session,
+            domain="leagueofcomicgeeks.com", path="/",
+        )
 
 
 def _add_months(d: date, n: int) -> date:
@@ -98,7 +104,6 @@ def fetch_window() -> list[dict]:
             description = None
 
             if cache_key not in series_cache:
-                # One extra call per new series to get series_id and description
                 try:
                     full = client.issue_info(issue.issue_id)
                     pagination = full.series_pagination  # triggers _get_data()

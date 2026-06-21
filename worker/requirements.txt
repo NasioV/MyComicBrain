@@ -1,4 +1,3 @@
 comicgeeks
 supabase
 python-dotenv
-curl-cffi
