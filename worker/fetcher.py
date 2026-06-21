@@ -1,8 +1,8 @@
 import os
 import time
-import requests
 from datetime import date, datetime, timedelta
 
+from curl_cffi import requests as curl_requests
 from comicgeeks import Comic_Geeks
 from comicgeeks.extract import extract as parse_title
 
@@ -11,28 +11,21 @@ REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
 
 class _LoCGClient(Comic_Geeks):
-    """Omite la validación de sesión con la home page de LoCG.
+    """Usa curl-cffi con impersonación de Chrome para evitar el bloqueo de Cloudflare.
 
-    comicgeeks verifica la cookie haciendo GET a leagueofcomicgeeks.com,
-    que Cloudflare bloquea desde IPs de datacenter (GitHub Actions, etc.).
-    Aquí fijamos la cookie directamente en la sesión: si es inválida,
-    fallará de forma natural en la primera llamada de datos.
+    La librería requests estándar expone un fingerprint TLS que Cloudflare detecta
+    y bloquea desde IPs de datacenter (GitHub Actions). curl-cffi replica el
+    fingerprint TLS exacto de Chrome, pasando la detección desde cualquier IP.
+    También omite la validación de home page de comicgeeks (que haría un GET
+    innecesario a leagueofcomicgeeks.com/).
     """
 
     def __init__(self, ci_session: str):
-        self._session = requests.Session()
+        self._session = curl_requests.Session(impersonate="chrome124")
         self._session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
+            "Cookie": f"ci_session={ci_session}",
         })
         self._session.authenticated = True
-        self._session.cookies.set(
-            "ci_session", ci_session,
-            domain="leagueofcomicgeeks.com", path="/",
-        )
 
 
 def _add_months(d: date, n: int) -> date:
@@ -83,7 +76,7 @@ def fetch_window() -> list[dict]:
     client = _LoCGClient(os.environ["LOCG_CI_SESSION"])
 
     seen_ids: set[int] = set()
-    # cache: "series_name|publisher_name" (lowercase) → series_id from LoCG
+    # cache: "series_name|publisher_name" (lowercase) -> series_id from LoCG
     series_cache: dict[str, int | None] = {}
     issues: list[dict] = []
 
