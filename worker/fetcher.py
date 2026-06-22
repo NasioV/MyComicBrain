@@ -15,37 +15,16 @@ REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 # None = fetch all publishers
 ALLOWED_PUBLISHERS: frozenset[str] | None = None
 
-def _detect_issue_type(comic, name: str) -> str:
-    """Detect format type from the price element text ('Format · $Price') or name."""
-    price_el = comic.find(class_="price")
-    if price_el:
-        parts = price_el.text.split("·")
-        if len(parts) >= 2:
-            fmt = parts[0].strip().lower()
-            if "annual" in fmt:
-                return "Annual"
-            if "variant" in fmt or "reprint" in fmt:
-                return "Variant & Reprint"
-            if "trade paperback" in fmt:
-                return "Trade Paperback"
-            if "hardcover" in fmt:
-                return "Hardcover"
-            if "digital" in fmt:
-                return "Digital Chapter"
-            if "regular" in fmt:
-                return "Regular Issue"
-
-    # Name-based fallback
-    n = name.lower()
-    if "annual" in n:
-        return "Annual"
-    if "omnibus" in n or "hardcover" in n or " hc " in n:
-        return "Hardcover"
-    if "trade paperback" in n or " tpb" in n or " tp " in n:
-        return "Trade Paperback"
-    if "facsimile" in n or "director's cut" in n:
-        return "Variant & Reprint"
-    return "Regular Issue"
+# LoCG format IDs (confirmed from their filter HTML)
+# Fetched as separate requests so each issue is tagged directly.
+# Digital Chapters (5) excluded — not relevant for a pull list.
+LOCG_FORMATS = [
+    ("1", "Regular Issue"),
+    ("6", "Annual"),
+    ("2", "Variant & Reprint"),
+    ("3", "Trade Paperback"),
+    ("4", "Hardcover"),
+]
 
 
 class _LoCGClient(Comic_Geeks):
@@ -66,16 +45,11 @@ class _LoCGClient(Comic_Geeks):
             domain="leagueofcomicgeeks.com", path="/",
         )
 
-    def new_releases(self, date: datetime = "now") -> list:  # type: ignore[override]
-        """Fetch all formats and attach _issue_type to each Issue."""
-        if date == "now":
-            date = datetime.now()
-        date_str = f"{date.month}/{date.day}/{date.year}"
-
-        # Include all known formats (1=Regular, 2=Annual, 3=TPB, 4=HC, 5=Omnibus, 6=Variant)
+    def _fetch_releases_page(self, date_str: str, format_id: str) -> list[Issue]:
+        """Un request: todos los releases de un formato para una semana."""
         url = (
             "https://leagueofcomicgeeks.com/comic/get_comics"
-            f"?list=releases&view=thumbs&format[]=1%2C2%2C3%2C4%2C5%2C6"
+            f"?list=releases&view=thumbs&format[]={format_id}"
             f"&date_type=week&date={date_str}&order=pulls"
         )
         r = self._session.get(url).json()
@@ -84,41 +58,58 @@ class _LoCGClient(Comic_Geeks):
 
         soup = BeautifulSoup(r["list"], features="lxml")
         content = soup.find(id="comic-list-block")
-        comics = content.find_all("li")
-        data = []
-        for comic in comics:
+        if not content:
+            return []
+
+        issues = []
+        for comic in content.find_all("li"):
             a = comic.find("a")
             if not a:
                 continue
             price_el = comic.find(class_="price")
             price = (
                 float(price_el.text.split("·")[1].strip()[1:])
-                if price_el else "Unknown"
+                if price_el and "·" in price_el.text
+                else "Unknown"
             )
-            name = comic.find(class_="title").text.strip()
-            issue_id = int(a["href"].split("/")[2])
+            name_el = comic.find(class_="title")
             date_el = comic.find(class_="date")
-            store_date = date_el["data-date"] if date_el else None
-            publisher_el = comic.find(class_="publisher")
-            publisher = publisher_el.text.strip() if publisher_el else ""
+            pub_el = comic.find(class_="publisher")
             img_el = comic.find("img")
-            cover = img_el["data-src"] if img_el else None
-            community = {
+
+            issue = Issue(issue_id=int(a["href"].split("/")[2]), session=self._session)
+            issue.name = name_el.text.strip() if name_el else ""
+            issue.url = a["href"]
+            issue.store_date = date_el["data-date"] if date_el else None
+            issue.price = price
+            issue.publisher = pub_el.text.strip() if pub_el else ""
+            issue.cover = img_el["data-src"] if img_el else None
+            issue.community = {
                 "rating": comic.get("data-community", 0),
                 "pull": comic.get("data-pulls", 0),
             }
+            issues.append(issue)
+        return issues
 
-            issue = Issue(issue_id=issue_id, session=self._session)
-            issue.name = name
-            issue.url = a["href"]
-            issue.store_date = store_date
-            issue.price = price
-            issue.publisher = publisher
-            issue.cover = cover
-            issue.community = community
-            issue._issue_type = _detect_issue_type(comic, name)
-            data.append(issue)
-        return data
+    def new_releases(self, date: datetime = "now") -> list[Issue]:  # type: ignore[override]
+        """Fetches all formats via separate requests, tagging each issue with _issue_type."""
+        if date == "now":
+            date = datetime.now()
+        date_str = f"{date.month}/{date.day}/{date.year}"
+
+        all_issues: list[Issue] = []
+        seen_ids: set[int] = set()
+
+        for format_id, issue_type in LOCG_FORMATS:
+            page = self._fetch_releases_page(date_str, format_id)
+            for issue in page:
+                if issue.issue_id not in seen_ids:
+                    seen_ids.add(issue.issue_id)
+                    issue._issue_type = issue_type
+                    all_issues.append(issue)
+            time.sleep(REQUEST_DELAY)
+
+        return all_issues
 
 
 def _add_months(d: date, n: int) -> date:
@@ -167,11 +158,7 @@ def _cover_url(cover) -> str | None:
 
 
 def _synthetic_series_id(series_name: str, publisher_name: str) -> int:
-    """ID negativo estable para series donde no se puede obtener el ID de LoCG.
-
-    Negativo para no colisionar nunca con IDs positivos reales de LoCG.
-    Determinista: el mismo nombre+editorial siempre da el mismo ID.
-    """
+    """ID negativo estable para series donde no se puede obtener el ID de LoCG."""
     raw = f"{series_name}|{publisher_name}".lower().encode()
     return -(int(hashlib.sha256(raw).hexdigest(), 16) % (2 ** 52))
 
@@ -184,10 +171,11 @@ def fetch_window() -> list[dict]:
     issues: list[dict] = []
 
     week_dates = _week_dates_in_window()
-    print(f"  Fetching {len(week_dates)} weeks...", flush=True)
+    print(f"  Fetching {len(week_dates)} weeks × {len(LOCG_FORMATS)} formats...", flush=True)
 
     for week_dt in week_dates:
         print(f"  Week {week_dt.date()}...", flush=True)
+        # new_releases() already sleeps between format requests internally
         week_releases = client.new_releases(date=week_dt)
         time.sleep(REQUEST_DELAY)
 
