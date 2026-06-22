@@ -114,7 +114,7 @@ export class SupabaseService {
 
     return this.client
       .from('releases')
-      .select('issue_id, series_id, issue_number, release_date, cover_url, price, series!inner(name, publishers!inner(name, publisher_group))')
+      .select('issue_id, series_id, issue_number, release_date, cover_url, price, issue_type, series!inner(name, publishers!inner(name, publisher_group))')
       .gte('release_date', start)
       .lt('release_date', end)
       .order('release_date', { ascending: true });
