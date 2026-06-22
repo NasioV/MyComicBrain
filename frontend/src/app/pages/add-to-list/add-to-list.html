@@ -1,0 +1,110 @@
+<div class="add-page">
+  <div class="add-card">
+    <h2 class="card-title">Añadir a la lista</h2>
+
+    @if (success()) {
+      <div class="success-msg">
+        ✓ Añadido correctamente.
+        <button class="btn-link" (click)="success.set(false)">Añadir otro</button>
+      </div>
+    }
+
+    <!-- ── Series search ───────────────────────────────────── -->
+    <div class="field">
+      <label>Serie</label>
+      <div class="autocomplete-wrap">
+        <input
+          type="text"
+          placeholder="Buscar serie…"
+          [value]="searchQuery()"
+          (input)="onSearchInput($any($event.target).value)"
+          (blur)="closeDropdown()"
+          [class.has-value]="selectedSeries()"
+        />
+        @if (searching()) { <span class="spinner">…</span> }
+
+        @if (showDropdown()) {
+          <div class="dropdown">
+            @for (s of searchResults(); track s.series_id) {
+              <div class="dropdown-item" (mousedown)="selectSeries(s)">
+                <span class="item-name">{{ s.name }}</span>
+                <span class="item-pub">{{ s.publishers.name }}</span>
+              </div>
+            }
+            <div class="dropdown-create" (mousedown)="startCreate()">
+              + Crear "{{ searchQuery() }}"
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (selectedSeries()) {
+        <p class="selected-info">
+          <strong>{{ selectedSeries()!.name }}</strong>
+          <span>{{ selectedSeries()!.publishers.name }}</span>
+        </p>
+      }
+    </div>
+
+    <!-- ── Create new series form ──────────────────────────── -->
+    @if (mode() === 'create') {
+      <div class="create-box">
+        <h3>Nueva serie</h3>
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" [value]="newSeriesName()" (input)="newSeriesName.set($any($event.target).value)" />
+        </div>
+        <div class="field">
+          <label>Editorial</label>
+          <select (change)="selectedPublisherId.set(+$any($event.target).value)">
+            <option value="">— Elige editorial —</option>
+            @for (p of publishers(); track p.publisher_id) {
+              <option [value]="p.publisher_id">{{ p.name }}</option>
+            }
+          </select>
+        </div>
+        @if (createError()) { <p class="field-error">{{ createError() }}</p> }
+        <div class="create-actions">
+          <button class="btn-primary" [disabled]="creating()" (click)="confirmCreate()">
+            {{ creating() ? 'Creando…' : 'Crear serie' }}
+          </button>
+          <button class="btn-ghost" (click)="cancelCreate()">Cancelar</button>
+        </div>
+      </div>
+    }
+
+    <!-- ── Issue details (only when series is selected) ───── -->
+    @if (selectedSeries() && mode() === 'search') {
+      <div class="details-box">
+        <div class="fields-row">
+          <div class="field">
+            <label>Número</label>
+            <input type="text" placeholder="1, 2, Annual 1…"
+              [value]="issueNumber()"
+              (input)="issueNumber.set($any($event.target).value)" />
+          </div>
+          <div class="field">
+            <label>Fecha de salida</label>
+            <input type="date"
+              [value]="releaseDate()"
+              (change)="releaseDate.set($any($event.target).value)" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Formato</label>
+          <div class="format-btns">
+            <button [class.active]="format() === 'digital'" (click)="setFormat('digital')">Digital</button>
+            <button [class.active]="format() === 'fisico'"  (click)="setFormat('fisico')">Físico</button>
+          </div>
+        </div>
+
+        @if (submitError()) { <p class="field-error">{{ submitError() }}</p> }
+
+        <button class="btn-primary btn-submit" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'Guardando…' : 'Añadir a la lista' }}
+        </button>
+      </div>
+    }
+  </div>
+</div>

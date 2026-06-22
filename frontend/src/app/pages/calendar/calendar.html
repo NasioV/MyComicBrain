@@ -1,0 +1,58 @@
+@if (syncError()) {
+  <div class="sync-banner">⚠ {{ syncError() }}</div>
+}
+
+<div class="calendar" [class]="'theme-' + group().toLowerCase()">
+  <div class="cal-header">
+    <button class="nav-btn" (click)="prevMonth()">‹</button>
+    <span class="month-label">{{ monthLabel() }}</span>
+    <button class="nav-btn" (click)="nextMonth()">›</button>
+  </div>
+
+  @if (loading()) {
+    <div class="state-msg">Cargando…</div>
+  } @else if (pulls().length === 0) {
+    <div class="state-msg">Sin pulls para este mes.</div>
+  } @else {
+    <div class="pulls-table-wrap">
+    <table class="pulls-table">
+      <thead>
+        <tr>
+          <th>Serie</th>
+          <th>#</th>
+          @if (showPublisher()) { <th>Editorial</th> }
+          <th>Fecha</th>
+          <th>Formato</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (pull of pulls(); track pull.id) {
+          <tr [class]="rowClass(pull.status)">
+            <td class="col-series">{{ pull.series.name }}</td>
+            <td class="col-num">{{ pull.issue_number }}</td>
+            @if (showPublisher()) {
+              <td class="col-pub">{{ pull.series.publishers.name }}</td>
+            }
+            <td class="col-date">{{ formatDate(pull.release_date) }}</td>
+            <td class="col-fmt">{{ pull.format === 'digital' ? 'Digital' : 'Físico' }}</td>
+            <td class="col-status">
+              <select (change)="changeStatus(pull, $any($event.target).value)">
+                @for (opt of STATUS_OPTIONS; track opt) {
+                  <option [value]="opt" [selected]="opt === pull.status">{{ STATUS_LABELS[opt] }}</option>
+                }
+              </select>
+            </td>
+            <td class="col-remove">
+              <button class="btn-remove" (click)="removePull(pull)" title="Quitar de la lista">×</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    </div>
+  }
+</div>
+
+<div class="footer-info">{{ nextUpdate() }}</div>

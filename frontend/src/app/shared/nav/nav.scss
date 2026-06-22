@@ -1,0 +1,88 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #141414;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+// ── Top row: brand + secondary actions ──────────────────────────────────────
+.nav-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.5rem;
+
+  .nav-brand {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #fff;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+    &:hover { opacity: 1; }
+  }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    a {
+      color: #666;
+      text-decoration: none;
+      font-size: 0.88rem;
+      transition: color 0.15s;
+      &:hover, &.active { color: #bbb; }
+    }
+
+    a.new-releases-link {
+      color: #c8c8c8;
+      font-weight: 500;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 0.2rem 0.65rem;
+      &:hover { border-color: #555; color: #fff; }
+      &.active { border-color: #555; color: #fff; }
+    }
+
+    button {
+      background: none;
+      border: none;
+      color: #444;
+      font-size: 0.88rem;
+      cursor: pointer;
+      padding: 0;
+      &:hover { color: #888; }
+    }
+  }
+}
+
+// ── Bottom row: main group tabs ──────────────────────────────────────────────
+.nav-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  padding: 0 1.5rem;
+  border-top: 1px solid #1e1e1e;
+
+  a {
+    padding: 0.6rem 2.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #555;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px; // align border with parent border-bottom
+
+    &:hover { color: #999; }
+  }
+
+  // Active state per group — each with its accent color
+  a.tab-dc.active     { color: #4a9eed; border-bottom-color: #0476d0; }
+  a.tab-marvel.active { color: #e05555; border-bottom-color: #e23636; }
+  a.tab-otros.active  { color: #f0c040; border-bottom-color: #d4a017; }
+}

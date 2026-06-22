@@ -47,7 +47,8 @@ def _add_months(d: date, n: int) -> date:
 def _week_dates_in_window() -> list[datetime]:
     today = date.today()
     start = _add_months(today, -WINDOW_MONTHS)
-    end = _add_months(today, WINDOW_MONTHS)
+    # Last day of the month WINDOW_MONTHS ahead (not just the 1st)
+    end = _add_months(today, WINDOW_MONTHS + 1) - timedelta(days=1)
 
     weeks = []
     current = start

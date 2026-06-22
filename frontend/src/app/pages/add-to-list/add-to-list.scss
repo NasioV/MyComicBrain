@@ -1,0 +1,215 @@
+.add-page {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+}
+
+.add-card {
+  background: #1a1a1a;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 480px;
+}
+
+.card-title {
+  margin: 0 0 1.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.success-msg {
+  background: rgba(39, 174, 96, 0.15);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+  border-radius: 6px;
+  color: #2ecc71;
+  padding: 0.65rem 1rem;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  .btn-link {
+    background: none;
+    border: none;
+    color: #2ecc71;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+    margin-left: auto;
+    &:hover { color: #27ae60; }
+  }
+}
+
+// ── Fields ────────────────────────────────────────────────────
+.field {
+  margin-bottom: 1.1rem;
+
+  label {
+    display: block;
+    font-size: 0.75rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  input, select {
+    width: 100%;
+    box-sizing: border-box;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    color: #ddd;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.7rem;
+    &:focus { outline: none; border-color: #444; }
+    &::placeholder { color: #3a3a3a; }
+    &.has-value { border-color: #2e6e2e; }
+  }
+}
+
+.fields-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+// ── Autocomplete ───────────────────────────────────────────────
+.autocomplete-wrap {
+  position: relative;
+
+  .spinner {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #555;
+    font-size: 0.8rem;
+  }
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: #1e1e1e;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  z-index: 50;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  gap: 0.75rem;
+  &:hover { background: #262626; }
+
+  .item-name { font-size: 0.85rem; color: #ddd; }
+  .item-pub  { font-size: 0.72rem; color: #555; white-space: nowrap; }
+}
+
+.dropdown-create {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  color: #4a9eed;
+  cursor: pointer;
+  border-top: 1px solid #222;
+  &:hover { background: #1a2a3a; }
+}
+
+.selected-info {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+
+  strong { color: #ccc; margin-right: 0.5rem; }
+  span   { color: #555; }
+}
+
+.field-error {
+  color: #e74c3c;
+  font-size: 0.78rem;
+  margin: -0.5rem 0 0.75rem;
+}
+
+// ── Create box ─────────────────────────────────────────────────
+.create-box {
+  background: #111;
+  border: 1px solid #252525;
+  border-radius: 6px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+
+  h3 {
+    margin: 0 0 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+}
+
+.create-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+// ── Details box ────────────────────────────────────────────────
+.details-box { margin-top: 0.5rem; }
+
+.format-btns {
+  display: flex;
+  gap: 0.5rem;
+
+  button {
+    flex: 1;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    color: #666;
+    font-size: 0.85rem;
+    padding: 0.45rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    &.active { border-color: #4a9eed; color: #4a9eed; background: rgba(74,158,237,0.1); }
+    &:hover:not(.active) { border-color: #3a3a3a; color: #aaa; }
+  }
+}
+
+// ── Buttons ────────────────────────────────────────────────────
+.btn-primary {
+  background: #2563a8;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.875rem;
+  padding: 0.55rem 1.25rem;
+  cursor: pointer;
+  &:hover:not(:disabled) { background: #1d4f8a; }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+
+.btn-submit { width: 100%; margin-top: 0.25rem; }
+
+.btn-ghost {
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #666;
+  font-size: 0.875rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  &:hover { border-color: #444; color: #aaa; }
+}

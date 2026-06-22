@@ -1,0 +1,16 @@
+<header class="nav">
+  <div class="nav-top">
+    <a class="nav-brand" routerLink="/">MyComicBrain</a>
+    <div class="nav-actions">
+      <a routerLink="/new-releases" routerLinkActive="active" class="new-releases-link">New Releases</a>
+      <a routerLink="/add" routerLinkActive="active">Añadir</a>
+      <button (click)="signOut()">Salir</button>
+    </div>
+  </div>
+
+  <nav class="nav-tabs">
+    <a routerLink="/dc"     routerLinkActive="active" class="tab-dc">DC</a>
+    <a routerLink="/marvel" routerLinkActive="active" class="tab-marvel">Marvel</a>
+    <a routerLink="/otros"  routerLinkActive="active" class="tab-otros">Otros</a>
+  </nav>
+</header>
