@@ -12,12 +12,28 @@ from comicgeeks.extract import extract as parse_title
 WINDOW_MONTHS = 3
 REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
-# Set to None to fetch all publishers; restrict here to keep runs fast
+# Palabras clave (minúsculas) de las editoriales que queremos ingerir.
+# Se comparan por substring insensible a mayúsculas, así toleramos las
+# variaciones de nombre de LoCG ("BOOM! Studios", "IDW Publishing",
+# "Dynamite Entertainment"...). Poner None para recoger todas.
 ALLOWED_PUBLISHERS: frozenset[str] | None = frozenset({
-    "DC Comics",
-    "Marvel Comics",
-    "Image Comics",
+    "dc comics",
+    "marvel",
+    "image comics",
+    "dynamite",
+    "boom",
+    "idw",
+    "ignition",
+    "oni press",
+    "dark horse",
 })
+
+
+def _publisher_allowed(name: str) -> bool:
+    if ALLOWED_PUBLISHERS is None:
+        return True
+    n = name.lower()
+    return any(kw in n for kw in ALLOWED_PUBLISHERS)
 
 # LoCG format IDs (confirmed from their filter HTML)
 # Fetched as separate requests so each issue is tagged directly.
@@ -189,7 +205,7 @@ def fetch_window() -> list[dict]:
 
             publisher_name = (issue.publisher or "").strip()
 
-            if ALLOWED_PUBLISHERS is not None and publisher_name not in ALLOWED_PUBLISHERS:
+            if not _publisher_allowed(publisher_name):
                 continue
 
             seen_ids.add(issue.issue_id)
