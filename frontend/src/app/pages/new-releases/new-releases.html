@@ -24,6 +24,12 @@
     }
   </div>
 
+  <div class="type-filter-row">
+    @for (t of allIssueTypes; track t) {
+      <button class="type-pill" [class.active]="activeTypes().has(t)" (click)="toggleType(t)">{{ t }}</button>
+    }
+  </div>
+
   @if (loading()) {
     <div class="state-msg">Cargando…</div>
   } @else if (filtered().length === 0) {

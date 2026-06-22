@@ -2,6 +2,17 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { SupabaseService } from '../../core/supabase';
 import { PullFormat, ReleaseRow } from '../../core/types';
 
+export const ALL_ISSUE_TYPES = [
+  'Regular Issue',
+  'Annual',
+  'Trade Paperback',
+  'Hardcover',
+  'Omnibus',
+  'Variant & Reprint',
+] as const;
+
+const DEFAULT_ACTIVE_TYPES = new Set<string>(['Regular Issue', 'Annual', 'Variant & Reprint']);
+
 @Component({
   selector: 'app-new-releases',
   imports: [],
@@ -20,6 +31,9 @@ export class NewReleases implements OnInit {
   searchQuery = signal('');
   loading = signal(true);
 
+  activeTypes = signal<Set<string>>(new Set(DEFAULT_ACTIVE_TYPES));
+  readonly allIssueTypes = ALL_ISSUE_TYPES;
+
   pulledIds = signal<Set<number>>(new Set());
   addingId = signal<number | null>(null);
   addingFormat = signal<PullFormat>('digital');
@@ -33,9 +47,11 @@ export class NewReleases implements OnInit {
   filtered = computed(() => {
     const pub = this.selectedPublisher();
     const q = this.searchQuery().toLowerCase().trim();
+    const types = this.activeTypes();
     let list = this.allReleases();
-    if (pub) list = list.filter(r => r.series.publishers.name === pub);
-    if (q)   list = list.filter(r => r.series.name.toLowerCase().includes(q));
+    if (pub)   list = list.filter(r => r.series.publishers.name === pub);
+    if (q)     list = list.filter(r => r.series.name.toLowerCase().includes(q));
+    list = list.filter(r => types.has(r.issue_type ?? 'Regular Issue'));
     return list;
   });
 
@@ -71,6 +87,12 @@ export class NewReleases implements OnInit {
     if (this.month() === 12) { this.year.update(y => y + 1); this.month.set(1); }
     else { this.month.update(m => m + 1); }
     this.loadReleases();
+  }
+
+  toggleType(type: string) {
+    const next = new Set(this.activeTypes());
+    if (next.has(type)) { next.delete(type); } else { next.add(type); }
+    this.activeTypes.set(next);
   }
 
   isAdded(issueId: number): boolean {

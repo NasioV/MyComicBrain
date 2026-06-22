@@ -7,6 +7,7 @@ export interface ReleaseRow {
   release_date: string;
   cover_url: string | null;
   price: string | null;
+  issue_type: string | null;
   series: {
     name: string;
     publishers: {

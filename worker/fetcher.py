@@ -4,18 +4,55 @@ import time
 import requests
 from datetime import date, datetime, timedelta
 
+from bs4 import BeautifulSoup
 from comicgeeks import Comic_Geeks
+from comicgeeks.classes import Issue
 from comicgeeks.extract import extract as parse_title
 
 WINDOW_MONTHS = 3
 REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
-# Set to None to fetch all publishers; restrict here to speed up initial testing
-ALLOWED_PUBLISHERS: frozenset[str] | None = frozenset({
-    "DC Comics",
-    "Marvel Comics",
-    "Image Comics",
-})
+# None = fetch all publishers
+ALLOWED_PUBLISHERS: frozenset[str] | None = None
+
+_FORMAT_ID_MAP = {
+    "1": "Regular Issue",
+    "2": "Annual",
+    "3": "Trade Paperback",
+    "4": "Hardcover",
+    "5": "Omnibus",
+    "6": "Variant & Reprint",
+}
+
+
+def _detect_issue_type(comic, name: str) -> str:
+    """Detect format type from the HTML <li> element or fall back to name parsing."""
+    # Check data attributes
+    for attr in ("data-format-id", "data-format", "data-type"):
+        val = comic.get(attr)
+        if val:
+            return _FORMAT_ID_MAP.get(str(val), "Regular Issue")
+
+    # Check CSS classes (format-1, format-2, …)
+    for cls in comic.get("class", []):
+        if cls.startswith("format-"):
+            fid = cls[len("format-"):]
+            if fid in _FORMAT_ID_MAP:
+                return _FORMAT_ID_MAP[fid]
+
+    # Name-based fallback
+    n = name.lower()
+    if "annual" in n:
+        return "Annual"
+    if "omnibus" in n:
+        return "Omnibus"
+    if any(x in n for x in ("hardcover", " hc ", " hc:", ":hc")):
+        return "Hardcover"
+    if any(x in n for x in ("trade paperback", " tpb", " tp ", "vol.")):
+        return "Trade Paperback"
+    if any(x in n for x in ("facsimile", "variant", "director's cut", "ratio", "reprint")):
+        return "Variant & Reprint"
+    return "Regular Issue"
 
 
 class _LoCGClient(Comic_Geeks):
@@ -35,6 +72,60 @@ class _LoCGClient(Comic_Geeks):
             "ci_session", ci_session,
             domain="leagueofcomicgeeks.com", path="/",
         )
+
+    def new_releases(self, date: datetime = "now") -> list:  # type: ignore[override]
+        """Fetch all formats and attach _issue_type to each Issue."""
+        if date == "now":
+            date = datetime.now()
+        date_str = f"{date.month}/{date.day}/{date.year}"
+
+        # Include all known formats (1=Regular, 2=Annual, 3=TPB, 4=HC, 5=Omnibus, 6=Variant)
+        url = (
+            "https://leagueofcomicgeeks.com/comic/get_comics"
+            f"?list=releases&view=thumbs&format[]=1%2C2%2C3%2C4%2C5%2C6"
+            f"&date_type=week&date={date_str}&order=pulls"
+        )
+        r = self._session.get(url).json()
+        if r["count"] == 0:
+            return []
+
+        soup = BeautifulSoup(r["list"], features="lxml")
+        content = soup.find(id="comic-list-block")
+        comics = content.find_all("li")
+        data = []
+        for comic in comics:
+            a = comic.find("a")
+            if not a:
+                continue
+            price_el = comic.find(class_="price")
+            price = (
+                float(price_el.text.split("·")[1].strip()[1:])
+                if price_el else "Unknown"
+            )
+            name = comic.find(class_="title").text.strip()
+            issue_id = int(a["href"].split("/")[2])
+            date_el = comic.find(class_="date")
+            store_date = date_el["data-date"] if date_el else None
+            publisher_el = comic.find(class_="publisher")
+            publisher = publisher_el.text.strip() if publisher_el else ""
+            img_el = comic.find("img")
+            cover = img_el["data-src"] if img_el else None
+            community = {
+                "rating": comic.get("data-community", 0),
+                "pull": comic.get("data-pulls", 0),
+            }
+
+            issue = Issue(issue_id=issue_id, session=self._session)
+            issue.name = name
+            issue.url = a["href"]
+            issue.store_date = store_date
+            issue.price = price
+            issue.publisher = publisher
+            issue.cover = cover
+            issue.community = community
+            issue._issue_type = _detect_issue_type(comic, name)
+            data.append(issue)
+        return data
 
 
 def _add_months(d: date, n: int) -> date:
@@ -147,6 +238,7 @@ def fetch_window() -> list[dict]:
                 "cover_url": _cover_url(issue.cover),
                 "price": str(issue.price) if issue.price not in (None, "Unknown") else None,
                 "description": description,
+                "issue_type": getattr(issue, "_issue_type", "Regular Issue"),
             })
 
     return issues
