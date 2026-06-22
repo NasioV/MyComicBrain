@@ -12,8 +12,12 @@ from comicgeeks.extract import extract as parse_title
 WINDOW_MONTHS = 3
 REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
-# None = fetch all publishers
-ALLOWED_PUBLISHERS: frozenset[str] | None = None
+# Set to None to fetch all publishers; restrict here to keep runs fast
+ALLOWED_PUBLISHERS: frozenset[str] | None = frozenset({
+    "DC Comics",
+    "Marvel Comics",
+    "Image Comics",
+})
 
 # LoCG format IDs (confirmed from their filter HTML)
 # Fetched as separate requests so each issue is tagged directly.
