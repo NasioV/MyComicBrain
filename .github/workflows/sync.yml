@@ -1,0 +1,25 @@
+name: Sync comic releases
+
+on:
+  schedule:
+    # Lunes a las 07:00 UTC (08:00 CET / 09:00 CEST — hora de Madrid)
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: [self-hosted, Windows, X64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: C:\Users\bicho\AppData\Local\Programs\Python\Python312\python.exe -m pip install -r worker/requirements.txt
+
+      - name: Run sync worker
+        run: C:\Users\bicho\AppData\Local\Programs\Python\Python312\python.exe worker/main.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LOCG_CI_SESSION: ${{ secrets.LOCG_CI_SESSION }}
+          PYTHONUTF8: "1"

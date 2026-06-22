@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# Misc
+.DS_Store
+*.log
