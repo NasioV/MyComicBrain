@@ -7,7 +7,7 @@ export const ALL_ISSUE_TYPES = [
   'Annual',
   'Trade Paperback',
   'Hardcover',
-  'Omnibus',
+  'Digital Chapter',
   'Variant & Reprint',
 ] as const;
 

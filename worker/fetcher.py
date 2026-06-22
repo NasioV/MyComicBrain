@@ -15,42 +15,35 @@ REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 # None = fetch all publishers
 ALLOWED_PUBLISHERS: frozenset[str] | None = None
 
-_FORMAT_ID_MAP = {
-    "1": "Regular Issue",
-    "2": "Annual",
-    "3": "Trade Paperback",
-    "4": "Hardcover",
-    "5": "Omnibus",
-    "6": "Variant & Reprint",
-}
-
-
 def _detect_issue_type(comic, name: str) -> str:
-    """Detect format type from the HTML <li> element or fall back to name parsing."""
-    # Check data attributes
-    for attr in ("data-format-id", "data-format", "data-type"):
-        val = comic.get(attr)
-        if val:
-            return _FORMAT_ID_MAP.get(str(val), "Regular Issue")
-
-    # Check CSS classes (format-1, format-2, …)
-    for cls in comic.get("class", []):
-        if cls.startswith("format-"):
-            fid = cls[len("format-"):]
-            if fid in _FORMAT_ID_MAP:
-                return _FORMAT_ID_MAP[fid]
+    """Detect format type from the price element text ('Format · $Price') or name."""
+    price_el = comic.find(class_="price")
+    if price_el:
+        parts = price_el.text.split("·")
+        if len(parts) >= 2:
+            fmt = parts[0].strip().lower()
+            if "annual" in fmt:
+                return "Annual"
+            if "variant" in fmt or "reprint" in fmt:
+                return "Variant & Reprint"
+            if "trade paperback" in fmt:
+                return "Trade Paperback"
+            if "hardcover" in fmt:
+                return "Hardcover"
+            if "digital" in fmt:
+                return "Digital Chapter"
+            if "regular" in fmt:
+                return "Regular Issue"
 
     # Name-based fallback
     n = name.lower()
     if "annual" in n:
         return "Annual"
-    if "omnibus" in n:
-        return "Omnibus"
-    if any(x in n for x in ("hardcover", " hc ", " hc:", ":hc")):
+    if "omnibus" in n or "hardcover" in n or " hc " in n:
         return "Hardcover"
-    if any(x in n for x in ("trade paperback", " tpb", " tp ", "vol.")):
+    if "trade paperback" in n or " tpb" in n or " tp " in n:
         return "Trade Paperback"
-    if any(x in n for x in ("facsimile", "variant", "director's cut", "ratio", "reprint")):
+    if "facsimile" in n or "director's cut" in n:
         return "Variant & Reprint"
     return "Regular Issue"
 
