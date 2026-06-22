@@ -209,8 +209,11 @@ def fetch_window() -> list[dict]:
                     series_cache[cache_key] = series_obj.series_id if series_obj else _synthetic_series_id(series_name, publisher_name)
                     description = full.description
                 except Exception as e:
-                    print(f"  Warning: no series_id for '{series_name}' ({publisher_name}): {e}", flush=True)
+                    # Casos límite del parseo de comicgeeks (TPB sin número, fechas
+                    # pre-1970 en Windows...). No es pérdida de dato: se usa un
+                    # series_id sintético determinista como fallback de diseño.
                     series_cache[cache_key] = _synthetic_series_id(series_name, publisher_name)
+                    print(f"  Nota: series_id sintético para '{series_name}' ({publisher_name}) — issue_info no parseable ({e})", flush=True)
                 time.sleep(REQUEST_DELAY)
 
             issues.append({
