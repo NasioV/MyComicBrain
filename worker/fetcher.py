@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import time
 import requests
 from datetime import date, datetime, timedelta
@@ -167,6 +168,17 @@ def _parse_date(raw) -> str | None:
         return None
 
 
+# Postgres no admite NUL ni caracteres de control en columnas text; si llegan
+# en el HTML scrapeado, Supabase rechaza el upsert entero con 400 Bad Request.
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _clean(s: str | None) -> str | None:
+    if s is None:
+        return None
+    return _CONTROL_CHARS.sub("", s)
+
+
 def _cover_url(cover) -> str | None:
     if cover is None:
         return None
@@ -235,13 +247,13 @@ def fetch_window() -> list[dict]:
             issues.append({
                 "issue_id": issue.issue_id,
                 "series_id": series_cache[cache_key],
-                "series_name": series_name,
-                "publisher_name": publisher_name,
-                "issue_number": issue_number or "",
+                "series_name": _clean(series_name),
+                "publisher_name": _clean(publisher_name),
+                "issue_number": _clean(issue_number or ""),
                 "release_date": _parse_date(issue.store_date),
-                "cover_url": _cover_url(issue.cover),
-                "price": str(issue.price) if issue.price not in (None, "Unknown") else None,
-                "description": description,
+                "cover_url": _clean(_cover_url(issue.cover)),
+                "price": _clean(str(issue.price)) if issue.price not in (None, "Unknown") else None,
+                "description": _clean(description),
                 "issue_type": getattr(issue, "_issue_type", "Regular Issue"),
             })
 

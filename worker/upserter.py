@@ -8,7 +8,19 @@ UPSERT_BATCH = 200
 
 def _batch_upsert(db: Client, table: str, rows: list[dict], on_conflict: str) -> None:
     for i in range(0, len(rows), UPSERT_BATCH):
-        db.table(table).upsert(rows[i:i + UPSERT_BATCH], on_conflict=on_conflict).execute()
+        batch = rows[i:i + UPSERT_BATCH]
+        try:
+            db.table(table).upsert(batch, on_conflict=on_conflict).execute()
+        except Exception as e:
+            # Para no perder un run entero por una fila problemática, reintentamos
+            # el lote fila a fila y saltamos (registrando) la que falle.
+            print(f"  Lote {table}[{i}:{i + len(batch)}] falló ({e}); reintento fila a fila...", flush=True)
+            for row in batch:
+                try:
+                    db.table(table).upsert(row, on_conflict=on_conflict).execute()
+                except Exception as e2:
+                    key = row.get("issue_id") or row.get("series_id") or row.get("name")
+                    print(f"    Fila saltada ({table} {key}): {e2}", flush=True)
 
 PUBLISHER_GROUP_MAP = {
     "DC Comics": "DC",
