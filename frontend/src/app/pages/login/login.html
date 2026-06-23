@@ -1,0 +1,25 @@
+<div class="login-wrap">
+  <div class="login-box">
+    <h1>MyComicBrain</h1>
+
+    <form (ngSubmit)="submit()">
+      <label>
+        Email
+        <input type="email" [(ngModel)]="email" name="email" autocomplete="email" required />
+      </label>
+
+      <label>
+        Contraseña
+        <input type="password" [(ngModel)]="password" name="password" autocomplete="current-password" required />
+      </label>
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'Entrando…' : 'Entrar' }}
+      </button>
+    </form>
+  </div>
+</div>

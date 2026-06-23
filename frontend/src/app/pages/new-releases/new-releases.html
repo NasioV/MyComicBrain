@@ -1,0 +1,81 @@
+<div class="nr-page">
+  <div class="nr-toolbar">
+    <div class="month-nav">
+      <button (click)="prevMonth()">‹</button>
+      <span class="month-label">{{ monthLabel() }}</span>
+      <button (click)="nextMonth()">›</button>
+    </div>
+
+    <input
+      class="search-input"
+      type="search"
+      placeholder="Buscar serie…"
+      [value]="searchQuery()"
+      (input)="searchQuery.set($any($event.target).value)"
+    />
+
+    @if (publishers().length > 0) {
+      <select class="pub-filter" [value]="selectedPublisher()" (change)="selectedPublisher.set($any($event.target).value)">
+        <option value="">Todas las editoriales</option>
+        @for (p of publishers(); track p) {
+          <option [value]="p">{{ p }}</option>
+        }
+      </select>
+    }
+  </div>
+
+  <div class="type-filter-row">
+    @for (t of allIssueTypes; track t) {
+      <button class="type-pill" [class.active]="activeTypes().has(t)" (click)="toggleType(t)">{{ t }}</button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="state-msg">Cargando…</div>
+  } @else if (filtered().length === 0) {
+    <div class="state-msg">Sin lanzamientos para este mes.</div>
+  } @else {
+    <div class="cards-grid">
+      @for (r of filtered(); track r.issue_id) {
+        <div class="card" [class.is-added]="isAdded(r.issue_id)">
+          <div class="cover-wrap">
+            @if (r.cover_url) {
+              <img [src]="r.cover_url" [alt]="r.series.name" loading="lazy" />
+            } @else {
+              <div class="cover-placeholder">?</div>
+            }
+          </div>
+
+          <div class="card-body">
+            <p class="series-name">{{ r.series.name }}</p>
+            <p class="meta">
+              #{{ r.issue_number }}
+              <span class="dot">·</span>
+              {{ formatDate(r.release_date) }}
+            </p>
+            <p class="publisher">{{ r.series.publishers.name }}</p>
+            @if (r.price) { <p class="price">{{ r.price }}</p> }
+          </div>
+
+          <div class="card-footer">
+            @if (isAdded(r.issue_id)) {
+              <span class="badge-added">✓ En lista</span>
+            } @else if (addingId() === r.issue_id) {
+              <div class="format-picker">
+                <button [class.active]="addingFormat() === 'digital'" (click)="setFormat('digital')">Digital</button>
+                <button [class.active]="addingFormat() === 'fisico'"  (click)="setFormat('fisico')">Físico</button>
+              </div>
+              @if (addingError()) { <p class="add-error">{{ addingError() }}</p> }
+              <div class="format-actions">
+                <button class="btn-confirm" (click)="confirmAdd(r)">Añadir</button>
+                <button class="btn-cancel"  (click)="cancelAdd()">×</button>
+              </div>
+            } @else {
+              <button class="btn-add" (click)="startAdd(r.issue_id)">+ Añadir</button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
