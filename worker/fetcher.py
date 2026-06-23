@@ -178,6 +178,9 @@ def _clean(s) -> str | None:
         return None
     if not isinstance(s, str):
         s = str(s)
+    # Garantiza texto codificable en UTF-8 (elimina surrogates sueltos y otros
+    # caracteres no representables que provocan 400 Bad Request en Supabase).
+    s = s.encode("utf-8", "ignore").decode("utf-8", "ignore")
     return _CONTROL_CHARS.sub("", s)
 
 

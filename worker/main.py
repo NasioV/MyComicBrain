@@ -33,6 +33,8 @@ def main():
         print(f"Done. {count} releases upserted.")
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         _log_sync(db, "error", message=str(e))
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

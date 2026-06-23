@@ -118,7 +118,6 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
             "release_date": i["release_date"],
             "cover_url": i["cover_url"],
             "price": i["price"],
-            "description": i["description"],
             "issue_type": i.get("issue_type", "Regular Issue"),
             "synced_at": synced_at,
         }
