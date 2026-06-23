@@ -146,15 +146,28 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
         and window_start <= date.fromisoformat(i["release_date"]) < window_end_cutoff
     }
     if in_window:
-        pulls = db.table("pulls").select("id, issue_id").execute()
-        for pull in pulls.data:
-            fresh = in_window.get(pull["issue_id"])
-            if not fresh:
-                continue
-            db.table("pulls").update({
-                "release_date": fresh["release_date"],
-                "cover_url": fresh["cover_url"],
-                "issue_number": fresh["issue_number"],
-            }).eq("id", pull["id"]).execute()
+        offset = 0
+        while True:
+            pulls = (
+                db.table("pulls")
+                .select("id, issue_id")
+                .range(offset, offset + SELECT_PAGE - 1)
+                .execute()
+                .data
+            )
+            if not pulls:
+                break
+            for pull in pulls:
+                fresh = in_window.get(pull["issue_id"])
+                if not fresh:
+                    continue
+                db.table("pulls").update({
+                    "release_date": fresh["release_date"],
+                    "cover_url": fresh["cover_url"],
+                    "issue_number": fresh["issue_number"],
+                }).eq("id", pull["id"]).execute()
+            if len(pulls) < SELECT_PAGE:
+                break
+            offset += SELECT_PAGE
 
     return len(releases)
