@@ -136,21 +136,21 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
     db.table("releases").delete().lt("release_date", str(window_start)).execute()
     db.table("releases").delete().gte("release_date", str(window_end_cutoff)).execute()
 
-    # 5. Refresco de pulls en ventana — solo toca fecha/portada/número, nunca format/status
+    # 5. Refresco de pulls en ventana — solo toca fecha/portada/número, nunca format/status.
+    # pulls es una tabla pequeña (selección personal): la leemos entera y filtramos en
+    # Python. Antes se hacía un in_(miles de ids) que generaba una URL gigante y un
+    # 400 Bad Request del servidor.
     in_window = {
         i["issue_id"]: i for i in issues
         if i["release_date"]
         and window_start <= date.fromisoformat(i["release_date"]) < window_end_cutoff
     }
     if in_window:
-        pulls = (
-            db.table("pulls")
-            .select("id, issue_id")
-            .in_("issue_id", list(in_window.keys()))
-            .execute()
-        )
+        pulls = db.table("pulls").select("id, issue_id").execute()
         for pull in pulls.data:
-            fresh = in_window[pull["issue_id"]]
+            fresh = in_window.get(pull["issue_id"])
+            if not fresh:
+                continue
             db.table("pulls").update({
                 "release_date": fresh["release_date"],
                 "cover_url": fresh["cover_url"],
