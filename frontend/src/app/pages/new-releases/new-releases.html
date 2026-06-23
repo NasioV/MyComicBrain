@@ -11,11 +11,11 @@
       type="search"
       placeholder="Buscar serie…"
       [value]="searchQuery()"
-      (input)="searchQuery.set($any($event.target).value)"
+      (input)="onSearch($any($event.target).value)"
     />
 
     @if (publishers().length > 0) {
-      <select class="pub-filter" [value]="selectedPublisher()" (change)="selectedPublisher.set($any($event.target).value)">
+      <select class="pub-filter" [value]="selectedPublisher()" (change)="onPublisher($any($event.target).value)">
         <option value="">Todas las editoriales</option>
         @for (p of publishers(); track p) {
           <option [value]="p">{{ p }}</option>
@@ -36,7 +36,7 @@
     <div class="state-msg">Sin lanzamientos para este mes.</div>
   } @else {
     <div class="cards-grid">
-      @for (r of filtered(); track r.issue_id) {
+      @for (r of visible(); track r.issue_id) {
         <div class="card" [class.is-added]="isAdded(r.issue_id)">
           <div class="cover-wrap">
             @if (r.cover_url) {

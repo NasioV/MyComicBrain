@@ -24,7 +24,7 @@
     <div class="cards-grid">
       @for (pull of pulls(); track pull.id) {
         <div class="pull-card" [class]="cardClass(pull.status)">
-          <button class="card-remove" (click)="removePull(pull)" title="Quitar de la lista">×</button>
+          <button class="card-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
           <div class="card-cover">
             @if (pull.cover_url) {
               <img [src]="pull.cover_url" [alt]="pull.series.name" loading="lazy" />
@@ -79,7 +79,7 @@
               </select>
             </td>
             <td class="col-remove">
-              <button class="btn-remove" (click)="removePull(pull)" title="Quitar de la lista">×</button>
+              <button class="btn-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
             </td>
           </tr>
         }
@@ -90,3 +90,20 @@
 </div>
 
 <div class="footer-info">{{ nextUpdate() }}</div>
+
+@if (confirmingRemove(); as pull) {
+  <div class="modal-overlay" (click)="cancelRemove()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <h3 class="modal-title">Quitar de la lista</h3>
+      <p class="modal-text">
+        ¿Seguro que quieres quitar
+        <strong>{{ pull.series.name }} #{{ pull.issue_number }}</strong>
+        de tu lista?
+      </p>
+      <div class="modal-actions">
+        <button class="modal-cancel" (click)="cancelRemove()">Cancelar</button>
+        <button class="modal-confirm" (click)="confirmRemove()">Quitar</button>
+      </div>
+    </div>
+  </div>
+}

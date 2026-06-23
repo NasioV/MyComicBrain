@@ -1,6 +1,8 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, HostListener, inject, signal, computed } from '@angular/core';
 import { SupabaseService } from '../../core/supabase';
 import { PullFormat, ReleaseRow } from '../../core/types';
+
+const PAGE = 48;
 
 export const ALL_ISSUE_TYPES = [
   'Regular Issue',
@@ -43,6 +45,8 @@ export class NewReleases implements OnInit {
       .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
   );
 
+  visibleCount = signal(PAGE);
+
   filtered = computed(() => {
     const pub = this.selectedPublisher();
     const q = this.searchQuery().toLowerCase().trim();
@@ -53,6 +57,32 @@ export class NewReleases implements OnInit {
     list = list.filter(r => types.has(r.issue_type ?? 'Regular Issue'));
     return list;
   });
+
+  // Solo se renderiza una tanda; crece al hacer scroll (fluidez con cientos de items)
+  visible = computed(() => this.filtered().slice(0, this.visibleCount()));
+
+  @HostListener('window:scroll')
+  onScroll() {
+    const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 800;
+    if (nearBottom && this.visibleCount() < this.filtered().length) {
+      this.visibleCount.update(n => n + PAGE);
+    }
+  }
+
+  private resetVisible() {
+    this.visibleCount.set(PAGE);
+    window.scrollTo({ top: 0 });
+  }
+
+  onSearch(value: string) {
+    this.searchQuery.set(value);
+    this.resetVisible();
+  }
+
+  onPublisher(value: string) {
+    this.selectedPublisher.set(value);
+    this.resetVisible();
+  }
 
   async ngOnInit() {
     await Promise.all([this.loadReleases(), this.loadPulledIds()]);
@@ -69,6 +99,7 @@ export class NewReleases implements OnInit {
       const pubs = [...new Set(rows.map(r => r.series.publishers.name))].sort();
       this.publishers.set(pubs);
     }
+    this.resetVisible();
     this.loading.set(false);
   }
 
@@ -92,6 +123,7 @@ export class NewReleases implements OnInit {
     const next = new Set(this.activeTypes());
     if (next.has(type)) { next.delete(type); } else { next.add(type); }
     this.activeTypes.set(next);
+    this.resetVisible();
   }
 
   isAdded(issueId: number): boolean {
