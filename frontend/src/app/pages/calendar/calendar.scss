@@ -165,12 +165,28 @@
   flex-direction: column;
   border-top: 3px solid #333;
 
-  // Color por estado (borde superior + tinte sutil)
-  &.card-leido     { border-top-color: #c0392b; background: linear-gradient(#1a1414, #1a1a1a); }
-  &.card-listo     { border-top-color: #27ae60; background: linear-gradient(#141a16, #1a1a1a); }
-  &.card-pedido    { border-top-color: #3498db; background: linear-gradient(#14181a, #1a1a1a); }
-  &.card-descargar { border-top-color: #f1c40f; background: linear-gradient(#1a1814, #1a1a1a); }
+  // Acento en el borde superior según estado
+  &.card-leido     { border-top-color: #c0392b; }
+  &.card-listo     { border-top-color: #27ae60; }
+  &.card-pedido    { border-top-color: #3498db; }
+  &.card-descargar { border-top-color: #f1c40f; }
   &.card-no-salido { border-top-color: #3a3a3a; }
+
+  // Color del cuerpo (zona del nombre) según estado
+  &.card-leido     .card-info { background: rgba(192, 57, 43, 0.32); }
+  &.card-listo     .card-info { background: rgba(39, 174, 96, 0.30); }
+  &.card-pedido    .card-info { background: rgba(52, 152, 219, 0.30); }
+  &.card-descargar .card-info { background: rgba(241, 196, 15, 0.22); }
+  &.card-no-salido .card-info { background: #1c1c1c; }
+
+  // Solo en Leído: velo rojo translúcido sobre la portada (la imagen sigue viéndose)
+  &.card-leido .card-cover::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(192, 57, 43, 0.45);
+    pointer-events: none;
+  }
 }
 
 .card-remove {
@@ -191,6 +207,7 @@
 }
 
 .card-cover {
+  position: relative;
   aspect-ratio: 2 / 3;
   background: #111;
   overflow: hidden;

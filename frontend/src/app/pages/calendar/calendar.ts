@@ -80,6 +80,8 @@ export class Calendar implements OnInit {
   }
 
   async removePull(pull: PullRow) {
+    const ok = confirm(`¿Quitar "${pull.series.name} #${pull.issue_number}" de tu lista?`);
+    if (!ok) return;
     this.pulls.update(list => list.filter(p => p.id !== pull.id));
     await this.supabase.deletePull(pull.id);
   }
