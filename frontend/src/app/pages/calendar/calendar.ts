@@ -16,6 +16,9 @@ export class Calendar implements OnInit {
   group = signal<PublisherGroup>('DC');
   year = signal(new Date().getFullYear());
   month = signal(new Date().getMonth() + 1);
+  viewMode = signal<'table' | 'visual'>(
+    (localStorage.getItem('mcb-calendar-view') as 'table' | 'visual') ?? 'table'
+  );
 
   pulls = signal<PullRow[]>([]);
   loading = signal(true);
@@ -77,6 +80,8 @@ export class Calendar implements OnInit {
   }
 
   async removePull(pull: PullRow) {
+    const ok = confirm(`¿Quitar "${pull.series.name} #${pull.issue_number}" de tu lista?`);
+    if (!ok) return;
     this.pulls.update(list => list.filter(p => p.id !== pull.id));
     await this.supabase.deletePull(pull.id);
   }
@@ -130,8 +135,17 @@ export class Calendar implements OnInit {
     return `${d}/${m}`;
   }
 
+  setView(mode: 'table' | 'visual') {
+    this.viewMode.set(mode);
+    localStorage.setItem('mcb-calendar-view', mode);
+  }
+
   rowClass(status: PullStatus): string {
     return `row-${status.replace('_', '-')}`;
+  }
+
+  cardClass(status: PullStatus): string {
+    return `card-${status.replace('_', '-')}`;
   }
 
   showPublisher(): boolean {
