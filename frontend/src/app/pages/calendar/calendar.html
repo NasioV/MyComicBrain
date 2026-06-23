@@ -3,6 +3,13 @@
 }
 
 <div class="calendar" [class]="'theme-' + group().toLowerCase()">
+  <div class="cal-toolbar">
+    <div class="view-toggle">
+      <button [class.active]="viewMode() === 'table'" (click)="setView('table')">Tabla</button>
+      <button [class.active]="viewMode() === 'visual'" (click)="setView('visual')">Visual</button>
+    </div>
+  </div>
+
   <div class="cal-header">
     <button class="nav-btn" (click)="prevMonth()">‹</button>
     <span class="month-label">{{ monthLabel() }}</span>
@@ -13,6 +20,33 @@
     <div class="state-msg">Cargando…</div>
   } @else if (pulls().length === 0) {
     <div class="state-msg">Sin pulls para este mes.</div>
+  } @else if (viewMode() === 'visual') {
+    <div class="cards-grid">
+      @for (pull of pulls(); track pull.id) {
+        <div class="pull-card" [class]="cardClass(pull.status)">
+          <button class="card-remove" (click)="removePull(pull)" title="Quitar de la lista">×</button>
+          <div class="card-cover">
+            @if (pull.cover_url) {
+              <img [src]="pull.cover_url" [alt]="pull.series.name" loading="lazy" />
+            } @else {
+              <div class="cover-ph">?</div>
+            }
+          </div>
+          <div class="card-info">
+            <p class="card-series">{{ pull.series.name }}</p>
+            <p class="card-meta">
+              #{{ pull.issue_number }} · {{ formatDate(pull.release_date) }} · {{ pull.format === 'digital' ? 'Digital' : 'Físico' }}
+            </p>
+            @if (showPublisher()) { <p class="card-pub">{{ pull.series.publishers.name }}</p> }
+            <select class="card-status" (change)="changeStatus(pull, $any($event.target).value)">
+              @for (opt of STATUS_OPTIONS; track opt) {
+                <option [value]="opt" [selected]="opt === pull.status">{{ STATUS_LABELS[opt] }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      }
+    </div>
   } @else {
     <div class="pulls-table-wrap">
     <table class="pulls-table">

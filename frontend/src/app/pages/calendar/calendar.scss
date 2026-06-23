@@ -18,6 +18,33 @@
   margin: 0 auto;
 }
 
+.cal-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 900px;
+  margin: 0 auto 0.5rem;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+
+  button {
+    background: #161616;
+    border: none;
+    color: #777;
+    font-size: 0.78rem;
+    padding: 0.3rem 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    &:not(:last-child) { border-right: 1px solid #2a2a2a; }
+    &:hover:not(.active) { color: #bbb; }
+    &.active { background: var(--accent); color: #fff; }
+  }
+}
+
 .cal-header {
   display: flex;
   align-items: center;
@@ -117,6 +144,105 @@
     &:hover { border-color: #444; }
     &:focus  { outline: none; border-color: var(--accent); }
   }
+}
+
+// ── Modo visual (portadas) ─────────────────────────────────────
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pull-card {
+  position: relative;
+  background: #1a1a1a;
+  border: 1px solid #222;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-top: 3px solid #333;
+
+  // Color por estado (borde superior + tinte sutil)
+  &.card-leido     { border-top-color: #c0392b; background: linear-gradient(#1a1414, #1a1a1a); }
+  &.card-listo     { border-top-color: #27ae60; background: linear-gradient(#141a16, #1a1a1a); }
+  &.card-pedido    { border-top-color: #3498db; background: linear-gradient(#14181a, #1a1a1a); }
+  &.card-descargar { border-top-color: #f1c40f; background: linear-gradient(#1a1814, #1a1a1a); }
+  &.card-no-salido { border-top-color: #3a3a3a; }
+}
+
+.card-remove {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: #ccc;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  &:hover { background: #e74c3c; color: #fff; }
+}
+
+.card-cover {
+  aspect-ratio: 2 / 3;
+  background: #111;
+  overflow: hidden;
+
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .cover-ph {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+    font-size: 2rem;
+  }
+}
+
+.card-info {
+  padding: 0.55rem 0.6rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+
+  .card-series {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #eee;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-meta { margin: 0; font-size: 0.72rem; color: #777; }
+  .card-pub  { margin: 0; font-size: 0.7rem; color: #8e6fb0; }
+}
+
+.card-status {
+  margin-top: auto;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #bbb;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.4rem;
+  cursor: pointer;
+  width: 100%;
+  &:hover { border-color: #444; }
+  &:focus { outline: none; border-color: var(--accent); }
 }
 
 .footer-info {
