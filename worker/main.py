@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from fetcher import fetch_window
 from supabase_client import get_client
-from upserter import upsert_all
+from upserter import fetch_known_series, upsert_all
 
 
 def _log_sync(db, status: str, count: int = 0, message: str = None):
@@ -23,7 +23,9 @@ def main():
 
     try:
         print("Fetching releases from League of Comic Geeks...")
-        issues = fetch_window()
+        known = fetch_known_series(db)
+        print(f"  {len(known)} series conocidas en BD (se reutilizarán sus IDs).")
+        issues = fetch_window(known_series=known)
         print(f"Fetched {len(issues)} issues. Writing to Supabase...")
 
         count = upsert_all(db, issues)

@@ -197,12 +197,15 @@ def _synthetic_series_id(series_name: str, publisher_name: str) -> int:
     return -(int(hashlib.sha256(raw).hexdigest(), 16) % (2 ** 52))
 
 
-def fetch_window() -> list[dict]:
+def fetch_window(known_series: dict[str, int] | None = None) -> list[dict]:
     client = _LoCGClient(os.environ["LOCG_CI_SESSION"])
 
+    known = known_series or {}
     seen_ids: set[int] = set()
     series_cache: dict[str, int] = {}
     issues: list[dict] = []
+    reused = 0   # series cuyo id se reutilizó de la BD (sin issue_info)
+    fetched = 0  # series nuevas consultadas con issue_info
 
     week_dates = _week_dates_in_window()
     print(f"  Fetching {len(week_dates)} weeks × {len(LOCG_FORMATS)} formats...", flush=True)
@@ -232,19 +235,26 @@ def fetch_window() -> list[dict]:
             description = None
 
             if cache_key not in series_cache:
-                try:
-                    full = client.issue_info(issue.issue_id)
-                    pagination = full.series_pagination
-                    series_obj = pagination.get("series") if isinstance(pagination, dict) else None
-                    series_cache[cache_key] = series_obj.series_id if series_obj else _synthetic_series_id(series_name, publisher_name)
-                    description = full.description
-                except Exception as e:
-                    # Casos límite del parseo de comicgeeks (TPB sin número, fechas
-                    # pre-1970 en Windows...). No es pérdida de dato: se usa un
-                    # series_id sintético determinista como fallback de diseño.
-                    series_cache[cache_key] = _synthetic_series_id(series_name, publisher_name)
-                    print(f"  Nota: series_id sintético para '{series_name}' ({publisher_name}) — issue_info no parseable ({e})", flush=True)
-                time.sleep(REQUEST_DELAY)
+                if cache_key in known:
+                    # Ya conocemos esta serie de un run anterior: reutilizamos su
+                    # series_id y nos saltamos issue_info (lo más lento del worker).
+                    series_cache[cache_key] = known[cache_key]
+                    reused += 1
+                else:
+                    try:
+                        full = client.issue_info(issue.issue_id)
+                        pagination = full.series_pagination
+                        series_obj = pagination.get("series") if isinstance(pagination, dict) else None
+                        series_cache[cache_key] = series_obj.series_id if series_obj else _synthetic_series_id(series_name, publisher_name)
+                        description = full.description
+                    except Exception as e:
+                        # Casos límite del parseo de comicgeeks (TPB sin número, fechas
+                        # pre-1970 en Windows...). No es pérdida de dato: se usa un
+                        # series_id sintético determinista como fallback de diseño.
+                        series_cache[cache_key] = _synthetic_series_id(series_name, publisher_name)
+                        print(f"  Nota: series_id sintético para '{series_name}' ({publisher_name}) — issue_info no parseable ({e})", flush=True)
+                    fetched += 1
+                    time.sleep(REQUEST_DELAY)
 
             issues.append({
                 "issue_id": issue.issue_id,
@@ -259,4 +269,5 @@ def fetch_window() -> list[dict]:
                 "issue_type": getattr(issue, "_issue_type", "Regular Issue"),
             })
 
+    print(f"  Series: {reused} reutilizadas de BD, {fetched} consultadas con issue_info.", flush=True)
     return issues

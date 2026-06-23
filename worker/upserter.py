@@ -4,6 +4,37 @@ from supabase import Client
 
 WINDOW_MONTHS = 3
 UPSERT_BATCH = 200
+SELECT_PAGE = 1000
+
+
+def fetch_known_series(db: Client) -> dict[str, int]:
+    """Mapa {nombre|editorial (minúsculas): series_id} de las series ya conocidas.
+
+    Permite reutilizar el series_id entre runs y saltarse la llamada issue_info()
+    (lo más lento del worker) para series que ya están en la BD.
+    """
+    pubs = db.table("publishers").select("publisher_id, name").execute().data
+    pub_name = {p["publisher_id"]: p["name"] for p in pubs}
+
+    known: dict[str, int] = {}
+    offset = 0
+    while True:
+        rows = (
+            db.table("series")
+            .select("series_id, name, publisher_id")
+            .range(offset, offset + SELECT_PAGE - 1)
+            .execute()
+            .data
+        )
+        if not rows:
+            break
+        for r in rows:
+            pname = pub_name.get(r["publisher_id"], "")
+            known[f"{r['name']}|{pname}".lower()] = r["series_id"]
+        if len(rows) < SELECT_PAGE:
+            break
+        offset += SELECT_PAGE
+    return known
 
 
 def _batch_upsert(db: Client, table: str, rows: list[dict], on_conflict: str) -> None:
