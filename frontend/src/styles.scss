@@ -3,8 +3,92 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 18px;
-  background: #111;
-  color: #e0e0e0;
+  background: #0a0b0e;
+  color: #e8eaed;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  // Acento y glow (sobrescritos por tema de grupo)
+  --accent: #5aa2f0;
+  --accent-strong: #2f7fd6;
+  --glow: rgba(60, 120, 200, 0.30);
+  --glow-2: rgba(120, 70, 200, 0.18);
+
+  // Cristal
+  --glass-bg: rgba(255, 255, 255, 0.055);
+  --glass-bg-strong: rgba(255, 255, 255, 0.085);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-border-strong: rgba(255, 255, 255, 0.16);
+  --glass-blur: 16px;
+  --shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 18px 50px -18px rgba(0, 0, 0, 0.75);
+
+  // Texto
+  --text: #eef0f3;
+  --text-dim: #aab2bd;
+  --text-faint: #6b7480;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+
+  // Colores de estado
+  --st-leido: #e0524a;
+  --st-listo: #2ec16e;
+  --st-pedido: #3da4ee;
+  --st-descargar: #f1c40f;
+  --st-no-salido: #5a6472;
+}
+
+// ── Temas por grupo ────────────────────────────────────────────
+.theme-dc {
+  --accent: #5aa2f0; --accent-strong: #2f7fd6;
+  --glow: rgba(40, 115, 215, 0.34); --glow-2: rgba(30, 80, 180, 0.16);
+}
+.theme-marvel {
+  --accent: #ff6363; --accent-strong: #e23636;
+  --glow: rgba(210, 45, 45, 0.34); --glow-2: rgba(150, 20, 40, 0.16);
+}
+.theme-otros {
+  --accent: #f3c64a; --accent-strong: #d4a017;
+  --glow: rgba(205, 150, 30, 0.28); --glow-2: rgba(140, 70, 180, 0.18);
+}
+.theme-neutral {
+  --accent: #7fa8d8; --accent-strong: #4a9eed;
+  --glow: rgba(70, 100, 150, 0.24); --glow-2: rgba(110, 70, 160, 0.14);
+}
+
+// ── Shell con fondo y glow ─────────────────────────────────────
+.app-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 560px at 78% -8%, var(--glow), transparent 62%),
+    radial-gradient(900px 500px at 12% 8%, var(--glow-2), transparent 60%),
+    linear-gradient(180deg, #0e1015 0%, #0a0b0e 60%);
+  background-attachment: fixed;
+  transition: background 0.5s ease;
+}
+
+// ── Utilidad de cristal ────────────────────────────────────────
+%glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--glass-border);
+}
+
+// Scrollbar discreta
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-track { background: transparent; }
+
+::selection { background: var(--accent-strong); color: #fff; }
+
+// Opciones de los <select> en tema oscuro (el popup nativo si no, sale blanco)
+option {
+  background: #15171c;
+  color: var(--text);
 }

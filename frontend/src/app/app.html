@@ -1,4 +1,6 @@
-@if (!isLoginPage()) {
-  <app-nav />
-}
-<router-outlet />
+<div class="app-shell" [class]="themeClass()">
+  @if (!isLoginPage()) {
+    <app-nav />
+  }
+  <router-outlet />
+</div>
