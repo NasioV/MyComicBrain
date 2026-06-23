@@ -173,9 +173,11 @@ def _parse_date(raw) -> str | None:
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
-def _clean(s: str | None) -> str | None:
+def _clean(s) -> str | None:
     if s is None:
         return None
+    if not isinstance(s, str):
+        s = str(s)
     return _CONTROL_CHARS.sub("", s)
 
 
