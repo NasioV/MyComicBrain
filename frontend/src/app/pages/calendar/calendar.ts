@@ -45,6 +45,9 @@ export class Calendar implements OnInit {
     const groupMap: Record<string, PublisherGroup> = { dc: 'DC', marvel: 'MARVEL', otros: 'OTROS' };
     this.group.set(groupMap[path] ?? 'DC');
 
+    // Automatismo v1: aplica el ascenso digital -> descargar (global) antes de
+    // mostrar nada, así el calendario ya refleja el estado correcto.
+    await this.supabase.autoUpgradeDigitalReleases();
     await this.loadPulls();
     this.checkSync();
     this.setNextUpdate();
@@ -58,18 +61,7 @@ export class Calendar implements OnInit {
       this.pulls.set([]);
       return;
     }
-
-    const rows = data as unknown as PullRow[];
-    const today = new Date().toISOString().split('T')[0];
-    const toUpdate = rows.filter(p =>
-      p.status === 'no_salido' && p.format === 'digital' && p.release_date <= today
-    );
-    await Promise.all(toUpdate.map(p => {
-      p.status = 'descargar';
-      return this.supabase.updatePullStatus(p.id, 'descargar');
-    }));
-
-    this.pulls.set(rows);
+    this.pulls.set(data as unknown as PullRow[]);
     this.loading.set(false);
   }
 

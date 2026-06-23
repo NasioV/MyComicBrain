@@ -65,6 +65,25 @@ export class SupabaseService {
       .eq('id', pullId);
   }
 
+  /**
+   * Automatismo v1: los pulls digitales cuya fecha ya ha llegado pasan de
+   * 'no_salido' a 'descargar'. Una sola query global (todos los grupos/meses),
+   * con la fecha LOCAL del navegador (Madrid). El worker nunca toca status.
+   */
+  async autoUpgradeDigitalReleases() {
+    const { data: { session } } = await this.client.auth.getSession();
+    if (!session) return;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return this.client
+      .from('pulls')
+      .update({ status: 'descargar', updated_at: new Date().toISOString() })
+      .eq('user_id', session.user.id)
+      .eq('status', 'no_salido')
+      .eq('format', 'digital')
+      .lte('release_date', today);
+  }
+
   async searchSeries(query: string): Promise<SeriesResult[]> {
     if (query.length < 2) return [];
     const { data } = await this.client
