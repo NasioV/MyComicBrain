@@ -27,6 +27,8 @@
     color: transparent;
     transition: opacity 0.15s;
     &:hover { opacity: 0.82; }
+
+    .brand-short { display: none; }
   }
 
   .nav-actions {
@@ -94,7 +96,11 @@
     flex-wrap: wrap;
     row-gap: 0.45rem;
 
-    .nav-brand { font-size: 1rem; }
+    .nav-brand {
+      font-size: 1.05rem;
+      .brand-full { display: none; }
+      .brand-short { display: inline; }
+    }
 
     .nav-actions {
       gap: 0.3rem;
