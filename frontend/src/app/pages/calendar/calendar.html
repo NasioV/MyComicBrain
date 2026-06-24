@@ -44,17 +44,19 @@
         <div class="pull-card" [class]="cardClass(pull.status)">
           <button class="card-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
           <div class="card-cover">
+            <span class="cover-num">#{{ pull.issue_number }}</span>
             @if (pull.cover_url) {
               <img [src]="pull.cover_url" [alt]="pull.series.name" loading="lazy" />
             } @else {
               <div class="cover-ph">?</div>
             }
           </div>
+          <div class="format-band" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'">
+            {{ pull.format === 'digital' ? 'DIGITAL' : 'FÍSICO' }}
+          </div>
           <div class="card-info">
             <p class="card-series">{{ pull.series.name }}</p>
-            <p class="card-meta">
-              #{{ pull.issue_number }} · {{ formatDate(pull.release_date) }} · {{ pull.format === 'digital' ? 'Digital' : 'Físico' }}
-            </p>
+            <p class="card-meta">{{ formatDate(pull.release_date) }}</p>
             @if (showPublisher()) { <p class="card-pub">{{ pull.series.publishers.name }}</p> }
             <select class="card-status" (change)="changeStatus(pull, $any($event.target).value)">
               @for (opt of STATUS_OPTIONS; track opt) {
@@ -88,7 +90,11 @@
               <td class="col-pub">{{ pull.series.publishers.name }}</td>
             }
             <td class="col-date">{{ formatDate(pull.release_date) }}</td>
-            <td class="col-fmt">{{ pull.format === 'digital' ? 'Digital' : 'Físico' }}</td>
+            <td class="col-fmt">
+              <span class="fmt-pill" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'">
+                {{ pull.format === 'digital' ? 'Digital' : 'Físico' }}
+              </span>
+            </td>
             <td class="col-status">
               <select (change)="changeStatus(pull, $any($event.target).value)">
                 @for (opt of STATUS_OPTIONS; track opt) {

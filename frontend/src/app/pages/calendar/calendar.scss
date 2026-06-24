@@ -324,6 +324,57 @@
     display: flex; align-items: center; justify-content: center;
     color: #2a2e35; font-size: 2rem;
   }
+
+  .cover-num {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 3;
+    max-width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: rgba(0, 0, 0, 0.66);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 0.92rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    padding: 0.1rem 0.55rem;
+    border-radius: 9px;
+    box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.7);
+  }
+}
+
+// Banda de formato (entre portada y nombre), 100% opaca
+.format-band {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.14em;
+  color: #fff;
+  padding: 0.05rem 0;
+  line-height: 1.15;
+  z-index: 2;
+  &.fmt-digital { background: #1f9d57; }   // verde
+  &.fmt-fisico  { background: #2563c9; }   // azul
+}
+
+// Píldora de formato en la tabla
+.fmt-pill {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid;
+  &.fmt-digital { color: #5fe39a; border-color: rgba(31, 157, 87, 0.65);  background: rgba(31, 157, 87, 0.18); }
+  &.fmt-fisico  { color: #7fb0ff; border-color: rgba(37, 99, 201, 0.65);  background: rgba(37, 99, 201, 0.20); }
 }
 
 .card-info {

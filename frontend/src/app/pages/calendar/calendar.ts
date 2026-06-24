@@ -17,7 +17,7 @@ export class Calendar implements OnInit {
   year = signal(new Date().getFullYear());
   month = signal(new Date().getMonth() + 1);
   viewMode = signal<'table' | 'visual'>(
-    (localStorage.getItem('mcb-calendar-view') as 'table' | 'visual') ?? 'table'
+    (localStorage.getItem('mcb-calendar-view') as 'table' | 'visual') ?? 'visual'
   );
 
   pulls = signal<PullRow[]>([]);
