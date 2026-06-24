@@ -1,6 +1,7 @@
 import { Component, OnInit, HostListener, inject, signal, computed } from '@angular/core';
 import { SupabaseService } from '../../core/supabase';
 import { PullFormat, ReleaseRow } from '../../core/types';
+import { isDcGo } from '../../core/profile';
 
 const PAGE = 48;
 
@@ -27,10 +28,15 @@ export class NewReleases implements OnInit {
   month = signal(new Date().getMonth() + 1);
 
   allReleases = signal<ReleaseRow[]>([]);
-  publishers = signal<string[]>([]);
+  hideDcGo = signal(true);
   selectedPublisher = signal('');
   searchQuery = signal('');
   loading = signal(true);
+
+  publishers = computed(() => {
+    const names = this.allReleases().map(r => r.series.publishers.name);
+    return [...new Set(names)].sort();
+  });
 
   activeTypes = signal<Set<string>>(new Set(DEFAULT_ACTIVE_TYPES));
   readonly allIssueTypes = ALL_ISSUE_TYPES;
@@ -52,6 +58,7 @@ export class NewReleases implements OnInit {
     const q = this.searchQuery().toLowerCase().trim();
     const types = this.activeTypes();
     let list = this.allReleases();
+    if (this.hideDcGo()) list = list.filter(r => !isDcGo(r.series.name));
     if (pub)   list = list.filter(r => r.series.publishers.name === pub);
     if (q)     list = list.filter(r => r.series.name.toLowerCase().includes(q));
     list = list.filter(r => types.has(r.issue_type ?? 'Regular Issue'));
@@ -85,6 +92,8 @@ export class NewReleases implements OnInit {
   }
 
   async ngOnInit() {
+    const profile = await this.supabase.getProfile();
+    if (profile) this.hideDcGo.set(profile.hideDcGo);
     await Promise.all([this.loadReleases(), this.loadPulledIds()]);
   }
 
@@ -96,8 +105,6 @@ export class NewReleases implements OnInit {
         a.series.name.localeCompare(b.series.name) || a.issue_number.localeCompare(b.issue_number)
       );
       this.allReleases.set(rows);
-      const pubs = [...new Set(rows.map(r => r.series.publishers.name))].sort();
-      this.publishers.set(pubs);
     }
     this.resetVisible();
     this.loading.set(false);

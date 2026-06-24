@@ -16,6 +16,7 @@ export class Settings implements OnInit {
   username = signal('');
   selectedAvatar = signal<string | null>(null);
   viewMode = signal<'table' | 'visual'>('visual');
+  hideDcGo = signal(true);
   email = signal('');
   saving = signal(false);
   success = signal(false);
@@ -27,8 +28,14 @@ export class Settings implements OnInit {
       this.username.set(p.username);
       this.selectedAvatar.set(p.avatarId);
       this.email.set(p.email);
+      this.hideDcGo.set(p.hideDcGo);
     }
     this.viewMode.set(localStorage.getItem(VIEW_KEY) === 'table' ? 'table' : 'visual');
+  }
+
+  toggleDcGo() {
+    this.hideDcGo.update(v => !v);
+    this.success.set(false);
   }
 
   avatarSrc(id: string) { return avatarUrl(id); }
@@ -51,6 +58,7 @@ export class Settings implements OnInit {
     const { error } = await this.supabase.updateProfile({
       username: name,
       avatar_id: this.selectedAvatar() ?? '',
+      hide_dc_go: this.hideDcGo(),
     });
     localStorage.setItem(VIEW_KEY, this.viewMode());
     this.saving.set(false);

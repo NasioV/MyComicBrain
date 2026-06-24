@@ -34,6 +34,17 @@
       </div>
     </div>
 
+    <div class="field">
+      <label>New Releases</label>
+      <button class="switch-row" (click)="toggleDcGo()">
+        <span class="switch-text">
+          Ocultar títulos de DC Go!
+          <small>Lanzamientos digitales de la plataforma DC Go!</small>
+        </span>
+        <span class="switch" [class.on]="hideDcGo()"><span class="knob"></span></span>
+      </button>
+    </div>
+
     @if (error()) { <p class="err">{{ error() }}</p> }
 
     <button class="btn-save" [disabled]="saving()" (click)="save()">

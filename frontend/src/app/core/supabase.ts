@@ -41,11 +41,13 @@ export class SupabaseService {
   profileFromSession(session: Session | null): Profile | null {
     if (!session) return null;
     const u = session.user;
-    const m = (u.user_metadata ?? {}) as Record<string, string>;
+    const m = (u.user_metadata ?? {}) as Record<string, unknown>;
     return {
-      username: m['username'] || (u.email?.split('@')[0] ?? 'Usuario'),
-      avatarId: m['avatar_id'] ?? null,
+      username: (m['username'] as string) || (u.email?.split('@')[0] ?? 'Usuario'),
+      avatarId: (m['avatar_id'] as string) ?? null,
       email: u.email ?? '',
+      // por defecto ocultos (true) si nunca se ha configurado
+      hideDcGo: m['hide_dc_go'] === undefined ? true : !!m['hide_dc_go'],
     };
   }
 
@@ -54,7 +56,7 @@ export class SupabaseService {
     return this.profileFromSession(session);
   }
 
-  updateProfile(data: { username?: string; avatar_id?: string }) {
+  updateProfile(data: { username?: string; avatar_id?: string; hide_dc_go?: boolean }) {
     return this.client.auth.updateUser({ data });
   }
 
