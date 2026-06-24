@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { SupabaseService } from '../../core/supabase';
 import { PublisherGroup, PullRow, PullStatus } from '../../core/types';
+import { VIEW_KEY } from '../../core/profile';
 
 @Component({
   selector: 'app-calendar',
@@ -17,7 +18,7 @@ export class Calendar implements OnInit {
   year = signal(new Date().getFullYear());
   month = signal(new Date().getMonth() + 1);
   viewMode = signal<'table' | 'visual'>(
-    (localStorage.getItem('mcb-calendar-view') as 'table' | 'visual') ?? 'visual'
+    (localStorage.getItem(VIEW_KEY) as 'table' | 'visual') ?? 'visual'
   );
 
   pulls = signal<PullRow[]>([]);
@@ -168,11 +169,6 @@ export class Calendar implements OnInit {
   formatDate(iso: string): string {
     const [, m, d] = iso.split('-');
     return `${d}/${m}`;
-  }
-
-  setView(mode: 'table' | 'visual') {
-    this.viewMode.set(mode);
-    localStorage.setItem('mcb-calendar-view', mode);
   }
 
   rowClass(status: PullStatus): string {

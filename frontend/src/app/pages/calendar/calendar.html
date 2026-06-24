@@ -3,13 +3,6 @@
 }
 
 <div class="calendar" [class]="'theme-' + group().toLowerCase()">
-  <div class="cal-toolbar">
-    <div class="view-toggle">
-      <button [class.active]="viewMode() === 'table'" (click)="setView('table')">Tabla</button>
-      <button [class.active]="viewMode() === 'visual'" (click)="setView('visual')">Visual</button>
-    </div>
-  </div>
-
   <div class="cal-header">
     <button class="nav-btn" (click)="prevMonth()"
       [title]="prevPending() ? prevPending() + ' por leer el mes anterior' : 'Mes anterior'">

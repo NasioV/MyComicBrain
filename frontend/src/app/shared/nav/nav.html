@@ -7,7 +7,28 @@
     <div class="nav-actions">
       <a routerLink="/new-releases" routerLinkActive="active" class="new-releases-link">New Releases</a>
       <a routerLink="/add" routerLinkActive="active">Añadir</a>
-      <button (click)="signOut()">Salir</button>
+
+      <div class="profile">
+        <button class="profile-btn" (click)="toggleMenu()" [class.open]="menuOpen()">
+          <span class="avatar">
+            @if (avatar()) {
+              <img [src]="avatar()" alt="" />
+            } @else {
+              {{ initials() }}
+            }
+          </span>
+          <span class="profile-name">{{ username() }}</span>
+          <span class="caret">▾</span>
+        </button>
+
+        @if (menuOpen()) {
+          <div class="menu-backdrop" (click)="closeMenu()"></div>
+          <div class="profile-menu">
+            <a routerLink="/settings" routerLinkActive="active" (click)="closeMenu()">⚙ Configuración</a>
+            <button class="menu-signout" (click)="signOut()">Salir</button>
+          </div>
+        }
+      </div>
     </div>
   </div>
 
