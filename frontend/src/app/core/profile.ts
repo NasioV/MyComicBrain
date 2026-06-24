@@ -9,6 +9,12 @@ export interface Profile {
   username: string;
   avatarId: string | null;
   email: string;
+  hideDcGo: boolean;
+}
+
+/** Detecta títulos de DC Go! por el nombre de la serie (contiene "DC Go!"). */
+export function isDcGo(seriesName: string | null | undefined): boolean {
+  return (seriesName ?? '').toLowerCase().includes('dc go');
 }
 
 export function avatarUrl(avatarId: string | null): string | null {
