@@ -142,10 +142,10 @@
   .col-fmt    { color: var(--text-faint); width: 5rem; }
 
   // Tinte de fila por estado (borde-izquierdo coloreado)
-  .row-leido     { background: rgba(224, 82, 74, 0.14);  box-shadow: inset 3px 0 var(--st-leido); }
-  .row-listo     { background: rgba(46, 193, 110, 0.13); box-shadow: inset 3px 0 var(--st-listo); }
-  .row-pedido    { background: rgba(61, 164, 238, 0.13); box-shadow: inset 3px 0 var(--st-pedido); }
-  .row-descargar { background: rgba(241, 196, 15, 0.13); box-shadow: inset 3px 0 var(--st-descargar); }
+  .row-leido     { background: rgba(255, 70, 60, 0.22);  box-shadow: inset 3px 0 var(--st-leido); }
+  .row-listo     { background: rgba(34, 221, 110, 0.20); box-shadow: inset 3px 0 var(--st-listo); }
+  .row-pedido    { background: rgba(47, 157, 255, 0.20); box-shadow: inset 3px 0 var(--st-pedido); }
+  .row-descargar { background: rgba(255, 207, 26, 0.20); box-shadow: inset 3px 0 var(--st-descargar); }
   .row-no-salido { box-shadow: inset 3px 0 var(--st-no-salido); }
 
   tbody tr:hover { background: rgba(255,255,255,0.06); }
@@ -220,17 +220,17 @@
   &.card-descargar::before { background: var(--st-descargar); }
 
   // Color del cuerpo (zona del nombre) según estado
-  &.card-leido     .card-info { background: rgba(224, 82, 74, 0.20); }
-  &.card-listo     .card-info { background: rgba(46, 193, 110, 0.18); }
-  &.card-pedido    .card-info { background: rgba(61, 164, 238, 0.18); }
-  &.card-descargar .card-info { background: rgba(241, 196, 15, 0.15); }
+  &.card-leido     .card-info { background: rgba(255, 70, 60, 0.30); }
+  &.card-listo     .card-info { background: rgba(34, 221, 110, 0.26); }
+  &.card-pedido    .card-info { background: rgba(47, 157, 255, 0.26); }
+  &.card-descargar .card-info { background: rgba(255, 207, 26, 0.22); }
 
   // Solo en Leído: velo rojo translúcido sobre la portada
   &.card-leido .card-cover::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(192, 57, 43, 0.42);
+    background: rgba(255, 60, 50, 0.42);
     pointer-events: none;
   }
 }
@@ -401,4 +401,26 @@
 @keyframes modal-pop {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .calendar { padding: 1rem 0.85rem 0.5rem; }
+
+  .cal-header { gap: 0.75rem; margin-bottom: 1.1rem; }
+  .month-label { min-width: 0; font-size: 1.1rem; }
+  .nav-btn { width: 2.1rem; height: 2.1rem; font-size: 1.1rem; }
+
+  // Tabla: scroll horizontal si no cabe + celdas más compactas
+  .pulls-table-wrap { overflow-x: auto; }
+  .pulls-table { font-size: 0.82rem; }
+  .pulls-table th, .pulls-table td { padding: 0.5rem 0.6rem; }
+
+  // Tarjetas: 2 columnas en móvil en vez de 1 gigante
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.8rem;
+  }
+
+  // La × de quitar siempre visible en táctil (no hay hover)
+  .card-remove { opacity: 1; }
 }

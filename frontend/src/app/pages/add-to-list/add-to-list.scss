@@ -226,3 +226,9 @@
   transition: all 0.15s;
   &:hover { border-color: var(--glass-border-strong); color: #fff; }
 }
+
+@media (max-width: 640px) {
+  .add-page { padding: 1.5rem 0.85rem; }
+  .add-card { padding: 1.5rem 1.25rem; }
+  .fields-row { grid-template-columns: 1fr; }
+}

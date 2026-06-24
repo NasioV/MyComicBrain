@@ -237,3 +237,18 @@
   color: var(--st-leido);
   margin: 0;
 }
+
+@media (max-width: 640px) {
+  .nr-page { padding: 1rem 0.85rem 2rem; }
+
+  .nr-toolbar { gap: 0.7rem; }
+  .month-nav .month-label { min-width: 0; font-size: 1rem; }
+
+  // Buscador y filtro a ancho completo en móvil
+  .search-input, .pub-filter { width: 100%; }
+
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.8rem;
+  }
+}
