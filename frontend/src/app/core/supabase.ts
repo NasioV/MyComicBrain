@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
 import { PublisherGroup, PublisherOption, PullFormat, PullStatus, ReleaseRow, SeriesResult, SyncLog } from './types';
+import { Profile } from './profile';
 
 async function computeManualSeriesId(name: string, publisherName: string): Promise<number> {
   const raw = `${name}|${publisherName}`.toLowerCase();
@@ -33,6 +34,28 @@ export class SupabaseService {
 
   signOut() {
     return this.client.auth.signOut();
+  }
+
+  /** Mapea una sesión a Profile de forma SÍNCRONA (sin tocar el cliente de auth).
+   *  Seguro de usar dentro del callback de onAuthStateChange. */
+  profileFromSession(session: Session | null): Profile | null {
+    if (!session) return null;
+    const u = session.user;
+    const m = (u.user_metadata ?? {}) as Record<string, string>;
+    return {
+      username: m['username'] || (u.email?.split('@')[0] ?? 'Usuario'),
+      avatarId: m['avatar_id'] ?? null,
+      email: u.email ?? '',
+    };
+  }
+
+  async getProfile(): Promise<Profile | null> {
+    const { data: { session } } = await this.client.auth.getSession();
+    return this.profileFromSession(session);
+  }
+
+  updateProfile(data: { username?: string; avatar_id?: string }) {
+    return this.client.auth.updateUser({ data });
   }
 
   async getPullsForMonth(group: PublisherGroup, year: number, month: number) {

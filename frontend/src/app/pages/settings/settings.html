@@ -1,0 +1,43 @@
+<div class="settings-page">
+  <div class="settings-card">
+    <div class="settings-head">
+      <h2>Configuración</h2>
+      <a class="back" routerLink="/">‹ Volver</a>
+    </div>
+
+    @if (success()) {
+      <div class="ok-msg">✓ Cambios guardados.</div>
+    }
+
+    <div class="field">
+      <label>Nombre de usuario</label>
+      <input type="text" [value]="username()" (input)="username.set($any($event.target).value)" />
+      @if (email()) { <p class="email-note">{{ email() }}</p> }
+    </div>
+
+    <div class="field">
+      <label>Avatar</label>
+      <div class="avatar-grid">
+        @for (a of avatars; track a) {
+          <button class="avatar-opt" [class.selected]="selectedAvatar() === a" (click)="selectAvatar(a)">
+            <img [src]="avatarSrc(a)" alt="" />
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Vista del calendario</label>
+      <div class="view-toggle">
+        <button [class.active]="viewMode() === 'visual'" (click)="setView('visual')">Visual</button>
+        <button [class.active]="viewMode() === 'table'" (click)="setView('table')">Tabla</button>
+      </div>
+    </div>
+
+    @if (error()) { <p class="err">{{ error() }}</p> }
+
+    <button class="btn-save" [disabled]="saving()" (click)="save()">
+      {{ saving() ? 'Guardando…' : 'Guardar cambios' }}
+    </button>
+  </div>
+</div>

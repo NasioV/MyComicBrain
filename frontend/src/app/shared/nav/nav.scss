@@ -64,6 +64,99 @@
   }
 }
 
+// ── Perfil ─────────────────────────────────────────────────────
+.profile {
+  position: relative;
+  margin-left: 0.2rem;
+}
+
+.profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 999px !important;
+  padding: 0.25rem 0.6rem 0.25rem 0.3rem !important;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover, &.open { background: rgba(255,255,255,0.10) !important; }
+
+  .avatar {
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-strong);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    img { width: 100%; height: 100%; object-fit: cover; }
+  }
+
+  .profile-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .caret { font-size: 0.6rem; color: var(--text-faint); }
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 95;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem;
+  gap: 0.2rem;
+  background: rgba(20, 23, 28, 0.92);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  animation: menu-pop 0.15s ease;
+
+  a, button {
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.55rem 0.7rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.13s;
+    &:hover { background: rgba(255,255,255,0.07); }
+  }
+
+  .menu-signout {
+    color: #ff7a6e;
+    &:hover { background: rgba(224, 82, 74, 0.18); }
+  }
+}
+
+@keyframes menu-pop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .nav-tabs {
   display: flex;
   justify-content: center;
@@ -113,4 +206,7 @@
     padding: 0.1rem 0.5rem 0.5rem;
     a { padding: 0.35rem 0; flex: 1; text-align: center; font-size: 0.82rem; }
   }
+
+  .profile-btn .profile-name { display: none; }
+  .profile-btn .caret { display: none; }
 }
