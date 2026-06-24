@@ -11,10 +11,28 @@
   </div>
 
   <div class="cal-header">
-    <button class="nav-btn" (click)="prevMonth()">‹</button>
+    <button class="nav-btn" (click)="prevMonth()"
+      [title]="prevPending() ? prevPending() + ' por leer el mes anterior' : 'Mes anterior'">
+      ‹
+      @if (prevPending() > 0) { <span class="month-badge">{{ prevPending() }}</span> }
+    </button>
     <span class="month-label">{{ monthLabel() }}</span>
-    <button class="nav-btn" (click)="nextMonth()">›</button>
+    <button class="nav-btn" (click)="nextMonth()"
+      [title]="nextPending() ? nextPending() + ' por leer el mes siguiente' : 'Mes siguiente'">
+      ›
+      @if (nextPending() > 0) { <span class="month-badge">{{ nextPending() }}</span> }
+    </button>
   </div>
+
+  @if (!loading() && summary().length > 0) {
+    <div class="month-summary">
+      @for (s of summary(); track s.status) {
+        <span class="chip" [class]="s.cls">
+          <span class="chip-dot"></span>{{ s.count }} {{ s.label }}
+        </span>
+      }
+    </div>
+  }
 
   @if (loading()) {
     <div class="state-msg">Cargando…</div>

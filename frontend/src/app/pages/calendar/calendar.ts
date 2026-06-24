@@ -35,9 +35,22 @@ export class Calendar implements OnInit {
 
   readonly STATUS_OPTIONS: PullStatus[] = ['no_salido', 'descargar', 'listo', 'pedido', 'leido'];
 
+  prevPending = signal(0);
+  nextPending = signal(0);
+
   monthLabel = computed(() => {
     const d = new Date(this.year(), this.month() - 1, 1);
     return d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  });
+
+  // Resumen del mes: contadores por estado (solo los que tienen alguno)
+  summary = computed(() => {
+    const counts: Record<PullStatus, number> = { no_salido: 0, descargar: 0, listo: 0, pedido: 0, leido: 0 };
+    for (const p of this.pulls()) counts[p.status]++;
+    const order: PullStatus[] = ['descargar', 'listo', 'pedido', 'no_salido', 'leido'];
+    return order
+      .filter(s => counts[s] > 0)
+      .map(s => ({ status: s, label: this.STATUS_LABELS[s], count: counts[s], cls: 'chip-' + s.replace('_', '-') }));
   });
 
   async ngOnInit() {
@@ -63,6 +76,25 @@ export class Calendar implements OnInit {
     }
     this.pulls.set(data as unknown as PullRow[]);
     this.loading.set(false);
+    this.loadAdjacent();
+  }
+
+  private adjacent(delta: number): { year: number; month: number } {
+    let m = this.month() + delta;
+    let y = this.year();
+    if (m < 1) { m = 12; y--; } else if (m > 12) { m = 1; y++; }
+    return { year: y, month: m };
+  }
+
+  async loadAdjacent() {
+    const prev = this.adjacent(-1);
+    const next = this.adjacent(1);
+    const [p, n] = await Promise.all([
+      this.supabase.getPendingCount(this.group(), prev.year, prev.month),
+      this.supabase.getPendingCount(this.group(), next.year, next.month),
+    ]);
+    this.prevPending.set(p);
+    this.nextPending.set(n);
   }
 
   async changeStatus(pull: PullRow, newStatus: PullStatus) {

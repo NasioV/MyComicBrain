@@ -58,6 +58,26 @@ export class SupabaseService {
     return this.client.from('pulls').delete().eq('id', pullId);
   }
 
+  /** Nº de pulls pendientes (no leídos) de un grupo en un mes. Para avisar en las flechas. */
+  async getPendingCount(group: PublisherGroup, year: number, month: number): Promise<number> {
+    const { data: { session } } = await this.client.auth.getSession();
+    if (!session) return 0;
+    const start = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nm = month === 12 ? 1 : month + 1;
+    const ny = month === 12 ? year + 1 : year;
+    const end = `${ny}-${String(nm).padStart(2, '0')}-01`;
+
+    const { count } = await this.client
+      .from('pulls')
+      .select('id, series!inner(publishers!inner(publisher_group))', { count: 'exact', head: true })
+      .eq('user_id', session.user.id)
+      .eq('series.publishers.publisher_group', group)
+      .gte('release_date', start)
+      .lt('release_date', end)
+      .neq('status', 'leido');
+    return count ?? 0;
+  }
+
   updatePullStatus(pullId: string, status: PullStatus) {
     return this.client
       .from('pulls')
