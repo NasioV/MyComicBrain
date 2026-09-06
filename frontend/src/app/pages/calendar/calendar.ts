@@ -1,8 +1,30 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { SupabaseService } from '../../core/supabase';
-import { PublisherGroup, PullRow, PullStatus } from '../../core/types';
+import { PublisherGroup, PullFormat, PullRow, PullStatus } from '../../core/types';
 import { VIEW_KEY } from '../../core/profile';
+
+interface WeekGroup { key: string; label: string; pulls: PullRow[]; }
+
+/** Lunes (ISO) de la semana que contiene la fecha, como 'YYYY-MM-DD'. */
+function mondayOf(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = (dt.getDay() + 6) % 7; // lunes = 0
+  dt.setDate(dt.getDate() - dow);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+function weekLabel(mondayIso: string): string {
+  const [y, m, d] = mondayIso.split('-').map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d + 6);
+  const mon = (dt: Date) => dt.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+  if (start.getMonth() === end.getMonth()) {
+    return `Semana ${start.getDate()}–${end.getDate()} ${mon(start)}`;
+  }
+  return `Semana ${start.getDate()} ${mon(start)} – ${end.getDate()} ${mon(end)}`;
+}
 
 @Component({
   selector: 'app-calendar',
@@ -44,6 +66,29 @@ export class Calendar implements OnInit {
     return d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
   });
 
+  // Agrupación por semanas: dentro de cada semana, pendientes primero (alfabético)
+  // y los leídos al final.
+  weeks = computed<WeekGroup[]>(() => {
+    const groups = new Map<string, PullRow[]>();
+    for (const p of this.pulls()) {
+      const k = mondayOf(p.release_date);
+      let arr = groups.get(k);
+      if (!arr) { arr = []; groups.set(k, arr); }
+      arr.push(p);
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, arr]) => {
+        arr.sort((a, b) => {
+          const al = a.status === 'leido' ? 1 : 0;
+          const bl = b.status === 'leido' ? 1 : 0;
+          if (al !== bl) return al - bl;                       // leídos al final
+          return a.series.name.localeCompare(b.series.name);   // alfabético
+        });
+        return { key, label: weekLabel(key), pulls: arr };
+      });
+  });
+
   // Resumen del mes: contadores por estado (solo los que tienen alguno)
   summary = computed(() => {
     const counts: Record<PullStatus, number> = { no_salido: 0, descargar: 0, listo: 0, pedido: 0, leido: 0 };
@@ -62,6 +107,11 @@ export class Calendar implements OnInit {
     // Automatismo v1: aplica el ascenso digital -> descargar (global) antes de
     // mostrar nada, así el calendario ya refleja el estado correcto.
     await this.supabase.autoUpgradeDigitalReleases();
+
+    // Arrancar en el primer mes con cosas pendientes (no leídas) del grupo.
+    const start = await this.supabase.getFirstPendingMonth(this.group());
+    if (start) { this.year.set(start.year); this.month.set(start.month); }
+
     await this.loadPulls();
     this.checkSync();
     this.setNextUpdate();
@@ -102,6 +152,13 @@ export class Calendar implements OnInit {
     pull.status = newStatus;
     this.pulls.update(list => [...list]);
     await this.supabase.updatePullStatus(pull.id, newStatus);
+  }
+
+  async changeFormat(pull: PullRow) {
+    const next: PullFormat = pull.format === 'digital' ? 'fisico' : 'digital';
+    pull.format = next;
+    this.pulls.update(list => [...list]);
+    await this.supabase.updatePullFormat(pull.id, next);
   }
 
   confirmingRemove = signal<PullRow | null>(null);
