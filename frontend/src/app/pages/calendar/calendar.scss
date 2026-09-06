@@ -160,10 +160,10 @@
   .col-fmt    { color: var(--text-faint); width: 5rem; }
 
   // Tinte de fila por estado (borde-izquierdo coloreado)
-  .row-leido     { background: rgba(255, 70, 60, 0.22);  box-shadow: inset 3px 0 var(--st-leido); }
-  .row-listo     { background: rgba(34, 221, 110, 0.20); box-shadow: inset 3px 0 var(--st-listo); }
-  .row-pedido    { background: rgba(47, 157, 255, 0.20); box-shadow: inset 3px 0 var(--st-pedido); }
-  .row-descargar { background: rgba(255, 207, 26, 0.20); box-shadow: inset 3px 0 var(--st-descargar); }
+  .row-leido     { background: rgba(255, 45, 45, 0.28);  box-shadow: inset 3px 0 var(--st-leido); }
+  .row-listo     { background: rgba(22, 224, 106, 0.26); box-shadow: inset 3px 0 var(--st-listo); }
+  .row-pedido    { background: rgba(26, 148, 255, 0.26); box-shadow: inset 3px 0 var(--st-pedido); }
+  .row-descargar { background: rgba(255, 212, 26, 0.26); box-shadow: inset 3px 0 var(--st-descargar); }
   .row-no-salido { box-shadow: inset 3px 0 var(--st-no-salido); }
 
   tbody tr:hover { background: rgba(255,255,255,0.06); }
@@ -238,17 +238,17 @@
   &.card-descargar::before { background: var(--st-descargar); }
 
   // Color del cuerpo (zona del nombre) según estado
-  &.card-leido     .card-info { background: rgba(255, 70, 60, 0.30); }
-  &.card-listo     .card-info { background: rgba(34, 221, 110, 0.26); }
-  &.card-pedido    .card-info { background: rgba(47, 157, 255, 0.26); }
-  &.card-descargar .card-info { background: rgba(255, 207, 26, 0.22); }
+  &.card-leido     .card-info { background: rgba(255, 45, 45, 0.36); }
+  &.card-listo     .card-info { background: rgba(22, 224, 106, 0.32); }
+  &.card-pedido    .card-info { background: rgba(26, 148, 255, 0.32); }
+  &.card-descargar .card-info { background: rgba(255, 212, 26, 0.28); }
 
   // Solo en Leído: velo rojo translúcido sobre la portada
   &.card-leido .card-cover::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(255, 60, 50, 0.42);
+    background: rgba(255, 45, 45, 0.44);
     pointer-events: none;
   }
 }
@@ -314,32 +314,59 @@
 
 // Banda de formato (entre portada y nombre), 100% opaca
 .format-band {
+  display: block;
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
   text-align: center;
   font-size: 0.7rem;
   font-weight: 800;
   font-style: italic;
   letter-spacing: 0.14em;
   color: #fff;
-  padding: 0.05rem 0;
+  padding: 0.1rem 0;
   line-height: 1.15;
   z-index: 2;
+  transition: filter 0.15s;
+  &:hover { filter: brightness(1.15); }
   &.fmt-digital { background: #1f9d57; }   // verde
   &.fmt-fisico  { background: #2563c9; }   // azul
 }
 
-// Píldora de formato en la tabla
+// Píldora de formato en la tabla (clicable)
 .fmt-pill {
   display: inline-block;
+  font-family: inherit;
+  cursor: pointer;
   font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.12rem 0.55rem;
+  padding: 0.14rem 0.6rem;
   border-radius: 999px;
   border: 1px solid;
+  transition: filter 0.15s;
+  &:hover { filter: brightness(1.2); }
   &.fmt-digital { color: #5fe39a; border-color: rgba(31, 157, 87, 0.65);  background: rgba(31, 157, 87, 0.18); }
   &.fmt-fisico  { color: #7fb0ff; border-color: rgba(37, 99, 201, 0.65);  background: rgba(37, 99, 201, 0.20); }
 }
+
+// Cabecera de semana
+.week-head {
+  max-width: 1180px;
+  margin: 1.6rem auto 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  &::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
+}
+.week-head:first-of-type { margin-top: 0.4rem; }
 
 .card-info {
   padding: 0.65rem 0.7rem 0.7rem;

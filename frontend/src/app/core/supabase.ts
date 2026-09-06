@@ -110,6 +110,30 @@ export class SupabaseService {
       .eq('id', pullId);
   }
 
+  updatePullFormat(pullId: string, format: PullFormat) {
+    return this.client
+      .from('pulls')
+      .update({ format, updated_at: new Date().toISOString() })
+      .eq('id', pullId);
+  }
+
+  /** Año/mes del primer pull pendiente (no leído) del grupo. Para arrancar el home ahí. */
+  async getFirstPendingMonth(group: PublisherGroup): Promise<{ year: number; month: number } | null> {
+    const { data: { session } } = await this.client.auth.getSession();
+    if (!session) return null;
+    const { data } = await this.client
+      .from('pulls')
+      .select('release_date, series!inner(publishers!inner(publisher_group))')
+      .eq('user_id', session.user.id)
+      .eq('series.publishers.publisher_group', group)
+      .neq('status', 'leido')
+      .order('release_date', { ascending: true })
+      .limit(1);
+    if (!data || data.length === 0) return null;
+    const [y, m] = (data[0] as unknown as { release_date: string }).release_date.split('-').map(Number);
+    return { year: y, month: m };
+  }
+
   /**
    * Automatismo v1: los pulls digitales cuya fecha ya ha llegado pasan de
    * 'no_salido' a 'descargar'. Una sola query global (todos los grupos/meses),

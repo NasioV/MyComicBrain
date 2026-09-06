@@ -32,77 +32,85 @@
   } @else if (pulls().length === 0) {
     <div class="state-msg">Sin pulls para este mes.</div>
   } @else if (viewMode() === 'visual') {
-    <div class="cards-grid">
-      @for (pull of pulls(); track pull.id) {
-        <div class="pull-card" [class]="cardClass(pull.status)">
-          <button class="card-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
-          <div class="card-cover">
-            <span class="cover-num">#{{ pull.issue_number }}</span>
-            @if (pull.cover_url) {
-              <img [src]="pull.cover_url" [alt]="pull.series.name" loading="lazy" />
-            } @else {
-              <div class="cover-ph">?</div>
-            }
-          </div>
-          <div class="format-band" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'">
-            {{ pull.format === 'digital' ? 'DIGITAL' : 'FÍSICO' }}
-          </div>
-          <div class="card-info">
-            <p class="card-series">{{ pull.series.name }}</p>
-            <p class="card-meta">{{ formatDate(pull.release_date) }}</p>
-            @if (showPublisher()) { <p class="card-pub">{{ pull.series.publishers.name }}</p> }
-            <select class="card-status" (change)="changeStatus(pull, $any($event.target).value)">
-              @for (opt of STATUS_OPTIONS; track opt) {
-                <option [value]="opt" [selected]="opt === pull.status">{{ STATUS_LABELS[opt] }}</option>
+    @for (w of weeks(); track w.key) {
+      <h3 class="week-head">{{ w.label }}</h3>
+      <div class="cards-grid">
+        @for (pull of w.pulls; track pull.id) {
+          <div class="pull-card" [class]="cardClass(pull.status)">
+            <button class="card-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
+            <div class="card-cover">
+              <span class="cover-num">#{{ pull.issue_number }}</span>
+              @if (pull.cover_url) {
+                <img [src]="pull.cover_url" [alt]="pull.series.name" loading="lazy" />
+              } @else {
+                <div class="cover-ph">?</div>
               }
-            </select>
-          </div>
-        </div>
-      }
-    </div>
-  } @else {
-    <div class="pulls-table-wrap">
-    <table class="pulls-table">
-      <thead>
-        <tr>
-          <th>Serie</th>
-          <th>#</th>
-          @if (showPublisher()) { <th>Editorial</th> }
-          <th>Fecha</th>
-          <th>Formato</th>
-          <th>Estado</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (pull of pulls(); track pull.id) {
-          <tr [class]="rowClass(pull.status)">
-            <td class="col-series">{{ pull.series.name }}</td>
-            <td class="col-num">{{ pull.issue_number }}</td>
-            @if (showPublisher()) {
-              <td class="col-pub">{{ pull.series.publishers.name }}</td>
-            }
-            <td class="col-date">{{ formatDate(pull.release_date) }}</td>
-            <td class="col-fmt">
-              <span class="fmt-pill" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'">
-                {{ pull.format === 'digital' ? 'Digital' : 'Físico' }}
-              </span>
-            </td>
-            <td class="col-status">
-              <select (change)="changeStatus(pull, $any($event.target).value)">
+            </div>
+            <button class="format-band" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'"
+              (click)="changeFormat(pull)" title="Cambiar formato">
+              {{ pull.format === 'digital' ? 'DIGITAL' : 'FÍSICO' }}
+            </button>
+            <div class="card-info">
+              <p class="card-series">{{ pull.series.name }}</p>
+              <p class="card-meta">{{ formatDate(pull.release_date) }}</p>
+              @if (showPublisher()) { <p class="card-pub">{{ pull.series.publishers.name }}</p> }
+              <select class="card-status" (change)="changeStatus(pull, $any($event.target).value)">
                 @for (opt of STATUS_OPTIONS; track opt) {
                   <option [value]="opt" [selected]="opt === pull.status">{{ STATUS_LABELS[opt] }}</option>
                 }
               </select>
-            </td>
-            <td class="col-remove">
-              <button class="btn-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
-            </td>
-          </tr>
+            </div>
+          </div>
         }
-      </tbody>
-    </table>
-    </div>
+      </div>
+    }
+  } @else {
+    @for (w of weeks(); track w.key) {
+      <h3 class="week-head">{{ w.label }}</h3>
+      <div class="pulls-table-wrap">
+      <table class="pulls-table">
+        <thead>
+          <tr>
+            <th>Serie</th>
+            <th>#</th>
+            @if (showPublisher()) { <th>Editorial</th> }
+            <th>Fecha</th>
+            <th>Formato</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (pull of w.pulls; track pull.id) {
+            <tr [class]="rowClass(pull.status)">
+              <td class="col-series">{{ pull.series.name }}</td>
+              <td class="col-num">{{ pull.issue_number }}</td>
+              @if (showPublisher()) {
+                <td class="col-pub">{{ pull.series.publishers.name }}</td>
+              }
+              <td class="col-date">{{ formatDate(pull.release_date) }}</td>
+              <td class="col-fmt">
+                <button class="fmt-pill" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'"
+                  (click)="changeFormat(pull)" title="Cambiar formato">
+                  {{ pull.format === 'digital' ? 'Digital' : 'Físico' }}
+                </button>
+              </td>
+              <td class="col-status">
+                <select (change)="changeStatus(pull, $any($event.target).value)">
+                  @for (opt of STATUS_OPTIONS; track opt) {
+                    <option [value]="opt" [selected]="opt === pull.status">{{ STATUS_LABELS[opt] }}</option>
+                  }
+                </select>
+              </td>
+              <td class="col-remove">
+                <button class="btn-remove" (click)="askRemove(pull)" title="Quitar de la lista">×</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      </div>
+    }
   }
 </div>
 
