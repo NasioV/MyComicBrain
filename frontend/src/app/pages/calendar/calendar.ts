@@ -200,19 +200,21 @@ export class Calendar implements OnInit {
     const daysSince = (Date.now() - new Date(data.ran_at).getTime()) / 86_400_000;
     if (data.status === 'error') {
       this.syncError.set(`Último sync falló: ${data.message ?? 'error desconocido'}`);
-    } else if (daysSince > 10) {
+    } else if (daysSince > 7) {
+      // El sync corre cada 3 días: más de 7 sin actualizar = algo va mal
       this.syncError.set(`Sin actualizar desde hace ${Math.floor(daysSince)} días.`);
     }
   }
 
   setNextUpdate() {
+    // Mismo calendario que el cron del worker: '0 7 */3 * *' (UTC), es decir,
+    // a las 07:00 UTC de los días 1, 4, 7… 28, 31 de cada mes.
     const now = new Date();
-    const day = now.getUTCDay();
-    let daysUntil = (1 - day + 7) % 7;
-    if (daysUntil === 0 && now.getUTCHours() >= 7) daysUntil = 7;
     const next = new Date(now);
-    next.setUTCDate(now.getUTCDate() + daysUntil);
     next.setUTCHours(7, 0, 0, 0);
+    while (next <= now || (next.getUTCDate() - 1) % 3 !== 0) {
+      next.setUTCDate(next.getUTCDate() + 1);
+    }
 
     const label = next.toLocaleDateString('es-ES', {
       weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid',

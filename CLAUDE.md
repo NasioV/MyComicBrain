@@ -20,9 +20,12 @@ fecha que se actualiza solo cuando una editorial cambia fechas.
 - **Nombre provisional:** MyComicBrain
 - **Usuarios:** privada. Solo yo, como mucho un amigo más. Se publica en web pero **nadie
   ajeno puede entrar ni ver nada**.
-- **Fuente de datos:** League of Comic Geeks (LoCG), vía la librería Python `comicgeeks`
-  (scraper no oficial). De ahí salen título, número, editorial, fecha **y portada**.
-- **Sin Comic Vine** (descartado por retardo en las imágenes; LoCG cubre también las portadas).
+- **Fuente de datos:** **Metron** (metron.cloud), vía su **API pública** (cuenta gratuita).
+  De ahí salen título, número, editorial, fecha de salida **y portada**. Metron registra los
+  lanzamientos futuros desde los *solicitations* oficiales: ~7-8 semanas de visión a futuro.
+- **Histórico:** hasta oct-2026 la fuente fue League of Comic Geeks (LoCG) vía el scraper
+  `comicgeeks`. Se abandonó cuando LoCG puso un reto anti-bots de Cloudflare.
+- **Sin Comic Vine** (descartado por retardo en las imágenes).
 
 ---
 
@@ -32,13 +35,13 @@ fecha que se actualiza solo cuando una editorial cambia fechas.
 |------|------------|
 | Frontend | Angular, desplegado en **Vercel** |
 | Backend + BBDD | **Supabase** (Postgres + RLS + Auth) |
-| Worker de ingesta | Script **Python** con `comicgeeks`, en **GitHub Actions** (cron, 1×/semana) |
-| Imágenes | URL de portada de LoCG (S3), guardada en BBDD |
+| Worker de ingesta | Script **Python** contra la API de **Metron**, en **GitHub Actions** (runner de GitHub `ubuntu-latest`, cron cada 3 días) |
+| Imágenes | URL de portada de Metron, guardada en BBDD |
 
 Flujo:
 
 ```
-LoCG  ──►  Worker Python (cron, GitHub Actions)  ──►  Supabase: `publishers` + `series` + `releases`
+Metron ─►  Worker Python (cron, GitHub Actions)  ──►  Supabase: `publishers` + `series` + `releases`
                                                               │  (refresca snapshot de pulls
                                                               │   en ventana)
           App Angular  ◄──────────────────────────────────────┘
@@ -67,7 +70,7 @@ romper nada).
 
 ### Tabla `publishers` (editoriales — desplegable + grupo)
 
-La rellena el worker con cada editorial nueva que ve en LoCG; también admite altas manuales.
+La rellena el worker con cada editorial que ingiere; también admite altas manuales.
 El **grupo vive aquí**, no en la serie.
 
 | Campo | Tipo | Notas |
@@ -76,32 +79,38 @@ El **grupo vive aquí**, no en la serie.
 | `name` | text UNIQUE | "DC Comics", "Marvel Comics", "Image Comics"… — clave natural de búsqueda |
 | `publisher_group` | text | `DC` \| `MARVEL` \| `OTROS` (para los 3 botones) |
 
-> **Decisión:** la librería `comicgeeks` no expone el ID de editorial de LoCG (solo el nombre),
-> así que `publisher_id` es un entero auto-generado por Postgres. El `name` es la clave única
-> real. El worker hace upsert por `name`; Postgres asigna el ID en el primer insert y lo
-> mantiene estable en los siguientes.
+> **Decisión:** `publisher_id` es un entero auto-generado por Postgres y el `name` es la clave
+> única real. El worker hace upsert por `name`. Las editoriales de Metron se mapean (por su
+> id de Metron, en `worker/fetcher.py`) a los nombres canónicos de la BD ("Marvel Comics",
+> "Image Comics"…) para no duplicar filas.
+
+> **IDs de Metron:** se guardan **desplazados** (`1_000_000_000_000 + id de Metron`) en
+> `series_id` e `issue_id`, para no chocar nunca con los IDs antiguos de LoCG (positivos) ni
+> con los sintéticos de las series manuales (negativos).
 
 ### Tabla `series` (esqueleto duradero — NO se poda)
 
-La rellena el worker con cada serie que ve en LoCG; también se crean a mano desde el alta
+La rellena el worker con cada serie que ingiere; también se crean a mano desde el alta
 manual.
 
 | Campo | Tipo | Notas |
 |-------|------|-------|
-| `series_id` | bigint PK | id de LoCG cuando existe; sintético si es manual |
+| `series_id` | bigint PK | id de Metron desplazado; antiguos de LoCG; sintético (negativo) si es manual |
 | `name` | text | nombre de la serie |
 | `publisher_id` | bigint FK → publishers | el grupo se deriva de aquí |
-| `source` | text | `locg` \| `manual` |
+| `source` | text | `metron` \| `manual` \| `locg` (histórico) |
+| `series_type` | text | tipo de serie en Metron (Annual, Trade Paperback…); da el `issue_type` |
 
 ### Tabla `releases` (catálogo ±3 meses — el worker la reescribe y poda)
 
 | Campo | Tipo | Notas |
 |-------|------|-------|
-| `issue_id` | bigint PK | id del número en LoCG |
+| `issue_id` | bigint PK | id del número en Metron (desplazado) |
 | `series_id` | bigint FK → series | |
 | `issue_number` | text | texto, no número ("1", "1A", "Annual 1") |
-| `release_date` | date | |
-| `cover_url` | text | portada (S3 de LoCG) |
+| `release_date` | date | fecha de salida a tienda (`store_date` de Metron) |
+| `cover_url` | text | portada (Metron) |
+| `issue_type` | text | Regular Issue \| Annual \| Trade Paperback \| Hardcover |
 | `price` | text | opcional |
 | `description` | text | opcional |
 | `synced_at` | timestamptz | |
@@ -113,7 +122,7 @@ manual.
 | `id` | uuid PK | |
 | `user_id` | uuid FK → auth.users | para RLS |
 | `series_id` | bigint FK → series | |
-| `issue_id` | bigint NULL | id de LoCG si vino del catálogo; NULL si alta manual |
+| `issue_id` | bigint NULL | id del catálogo si vino de New Releases; NULL si alta manual |
 | `issue_number` | text | snapshot |
 | `release_date` | date | snapshot duradero (sobrevive a la poda de `releases`) |
 | `cover_url` | text | snapshot |
@@ -127,6 +136,11 @@ manual.
 con un pull (por `issue_id`), actualiza la copia `release_date` / `cover_url` / `issue_number`
 en `pulls`. Nunca toca `format` ni `status`. Los pulls manuales (`issue_id` NULL) no se
 refrescan.
+
+**Adopción de pulls de LoCG:** los pulls que vinieron de LoCG (`issue_id` < offset de
+Metron) se buscan en los números de Metron de la ventana por (nombre de serie normalizado,
+número, grupo). Si coinciden, se re-enlazan a Metron (`issue_id`, `series_id`, fecha,
+portada) y vuelven a refrescarse solos. Las series de LoCG que quedan sin pulls se borran.
 
 ### Tabla `sync_log` (estado del sync)
 
@@ -217,7 +231,7 @@ que ya no están en `releases`. **No depende del scraper.**
 ## 5. Qué entra en v1 y qué se difiere
 
 ### v1 — núcleo a construir primero
-1. Worker Python que llena `publishers` + `series` + `releases` (con portadas de LoCG) y
+1. Worker Python que llena `publishers` + `series` + `releases` (con portadas de Metron) y
    escribe `sync_log`. Configurado con `workflow_dispatch` para poder lanzarlo a mano desde
    GitHub sin esperar al cron.
 2. Login privado (1-2 cuentas, sin registro público, RLS).
@@ -235,7 +249,9 @@ que ya no están en `releases`. **No depende del scraper.**
 
 ### Futuro — anotado, no se construye aún
 - `reading_order` manual para orden de lectura en eventos.
-- Portadas propias en Supabase Storage (no depender del S3 de LoCG).
+- Portadas propias en Supabase Storage (no depender de las URLs de Metron).
+- Buscador en vivo de Metron en la pantalla Añadir (vía Supabase Edge Function, para no
+  exponer las credenciales de Metron en el navegador), para números antiguos.
 - Segundo usuario (amigo).
 - Más automatizaciones de estado.
 - Edición/ampliación del esquema con más detalle por tabla.
@@ -248,28 +264,37 @@ que ya no están en `releases`. **No depende del scraper.**
   botón, pero su vista muestra una columna **Editorial** para saber de cuál es cada número
   (en DC y Marvel esa columna no se muestra).
 - **Ejecución manual:** descartado el botón dentro de la app. En su lugar, el worker lleva
-  `workflow_dispatch` y se lanza desde la pestaña Actions de GitHub cuando haga falta (p. ej.
-  tras renovar la cookie). El cron 1×/semana es el ritmo automático.
+  `workflow_dispatch` y se lanza desde la pestaña Actions de GitHub cuando haga falta. El
+  cron es el ritmo automático.
 - **Estado inicial:** digital → No salido; físico → Pedido.
-- **Ventana del worker en `releases`:** -3 / +3 meses. El historial completo vive en `pulls`
-  (duradera), no en `releases`.
-- **Cron:** 1 vez por semana.
-- **Estado del sync:** tabla `sync_log` + banner rojo en la app si falla o está obsoleto.
+- **Ventana del worker en `releases`:** -3 / +3 meses (meses completos). El historial completo
+  vive en `pulls` (duradera), no en `releases`. No se baja todo el histórico de Metron: serían
+  cientos de miles de números y su límite de peticiones lo haría inviable.
+- **Cron:** cada 3 días (`0 7 */3 * *`, 07:00 UTC), en el runner de GitHub (`ubuntu-latest`),
+  sin depender de ningún PC. Cada run escribe en Supabase, lo que evita que el proyecto
+  gratuito se pause por inactividad (7 días).
+- **Keepalive de GitHub:** GitHub desactiva los cron tras 60 días sin commits. El workflow hace
+  un commit vacío automático si el último commit tiene más de 45 días.
+- **Estado del sync:** tabla `sync_log` + banner rojo en la app si falla o lleva >7 días sin
+  actualizar.
+- **Variantes:** Metron no registra las variantes como números aparte; New Releases no tiene
+  filtro de variantes.
 
 ---
 
 ## 7. Avisos heredados de la conversación
 
-- `comicgeeks` es un **scraper no oficial** de LoCG. Riesgo bajo para uso privado, pero sus
-  Términos de Uso prohíben el scraping y la librería **se puede romper** si LoCG cambia su
-  HTML. El alta manual existe justo por esto.
-- **El `ci_session` caduca y NO se arregla solo.** Cuando falle (banner rojo), el flujo es:
-  copiar una cookie fresca del navegador → pegarla en el secret de GitHub → lanzar el worker a
-  mano desde Actions (`workflow_dispatch`), sin esperar al cron. Trámite de un par de minutos,
-  cada varias semanas.
-- A veces el listado semanal trae menos detalle que la ficha individual; si falta algún dato,
-  se rellena con una llamada por número (a costa de más peticiones).
-- Mantener el worker **desacoplado** de la app: si el scraper falla, la app sigue viva.
+- **Metron** requiere cuenta (secrets `METRON_USER` y `METRON_PASS` en GitHub; en local, en
+  `worker/.env`). Límite ~20 peticiones/minuto: el worker espera ~3 s entre peticiones y
+  reintenta ante 429/5xx.
+- **Visión a futuro limitada a ~7-8 semanas** (el mes actual y el siguiente completos, más el
+  arranque del otro), porque Metron se alimenta de los *solicitations* de las editoriales.
+- Metron registra **pocos TPB/HC**; el grueso son números regulares.
+- El tipo de serie (para `issue_type`) cuesta una petición por serie nueva; se guarda en
+  `series.series_type` para no repetirla. El primer sync tras la migración es el más lento.
+- **LoCG queda descartado:** puso un reto anti-bots de Cloudflare. No se intenta burlar.
+- Mantener el worker **desacoplado** de la app: si la ingesta falla, la app sigue viva. El
+  alta manual es la red de seguridad.
 
 ---
 
@@ -279,4 +304,5 @@ que ya no están en `releases`. **No depende del scraper.**
 - Cuenta GitHub
 - Cuenta Vercel
 - Cuenta Supabase
+- Cuenta Metron (metron.cloud)
 - Node.js (Angular) y Python (worker) instalados en local

@@ -10,10 +10,10 @@ export const ALL_ISSUE_TYPES = [
   'Annual',
   'Trade Paperback',
   'Hardcover',
-  'Variant & Reprint',
 ] as const;
 
-const DEFAULT_ACTIVE_TYPES = new Set<string>(['Regular Issue', 'Annual', 'Variant & Reprint']);
+// Metron no registra las variantes como números aparte, así que no hay filtro para ellas.
+const DEFAULT_ACTIVE_TYPES = new Set<string>(['Regular Issue', 'Annual']);
 
 @Component({
   selector: 'app-new-releases',

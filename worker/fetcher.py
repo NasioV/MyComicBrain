@@ -1,136 +1,94 @@
-import hashlib
+"""Ingesta de lanzamientos desde la API de Metron (metron.cloud).
+
+Metron es una base de datos comunitaria de cómics con API pública (requiere
+cuenta gratuita). Sustituye a League of Comic Geeks, que dejó de ser accesible
+tras poner un reto anti-bots de Cloudflare.
+"""
 import os
 import re
 import time
-import requests
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
-from bs4 import BeautifulSoup
-from comicgeeks import Comic_Geeks
-from comicgeeks.classes import Issue
-from comicgeeks.extract import extract as parse_title
+import requests
+
+METRON_API = "https://metron.cloud/api"
+USER_AGENT = "MyComicBrain/1.0 (personal pull list)"
+REQUEST_DELAY = 3.2  # Metron permite ~20 peticiones/minuto
+MAX_RETRIES = 5
 
 WINDOW_MONTHS = 3
-REQUEST_DELAY = 1.5  # seconds between calls — be polite to LoCG
 
-# Palabras clave (minúsculas) de las editoriales que queremos ingerir.
-# Se comparan por substring insensible a mayúsculas, así toleramos las
-# variaciones de nombre de LoCG ("BOOM! Studios", "IDW Publishing",
-# "Dynamite Entertainment"...). Poner None para recoger todas.
-ALLOWED_PUBLISHERS: frozenset[str] | None = frozenset({
-    "dc comics",
-    "marvel",
-    "image comics",
-    "dynamite",
-    "boom",
-    "idw",
-    "ignition",
-    "oni press",
-    "dark horse",
-})
+# Los IDs de Metron se guardan desplazados para no chocar nunca con los IDs
+# antiguos de LoCG (positivos) ni con los sintéticos de las series manuales
+# (negativos). Cabe de sobra en bigint y en un number de JS.
+METRON_OFFSET = 1_000_000_000_000
 
+# Editoriales a ingerir: id de Metron -> nombre canónico en nuestra BD
+# (el mismo que usaba LoCG, para no duplicar filas en `publishers`).
+PUBLISHERS: dict[int, str] = {
+    2: "DC Comics",
+    1: "Marvel Comics",
+    4: "Image Comics",
+    21: "Dynamite Entertainment",
+    20: "BOOM! Studios",
+    6: "IDW Publishing",
+    197: "Ignition Press",
+    31: "Oni Press",
+    3: "Dark Horse Comics",
+}
 
-def _publisher_allowed(name: str) -> bool:
-    if ALLOWED_PUBLISHERS is None:
-        return True
-    n = name.lower()
-    return any(kw in n for kw in ALLOWED_PUBLISHERS)
-
-# LoCG format IDs (confirmed from their filter HTML)
-# Fetched as separate requests so each issue is tagged directly.
-# Digital Chapters (5) excluded — not relevant for a pull list.
-LOCG_FORMATS = [
-    ("1", "Regular Issue"),
-    ("6", "Annual"),
-    ("2", "Variant & Reprint"),
-    ("3", "Trade Paperback"),
-    ("4", "Hardcover"),
-]
+# Tipo de serie de Metron -> issue_type que usan los filtros de New Releases.
+# Cualquier otro tipo (Ongoing, Limited Series, One-Shot...) es "Regular Issue".
+SERIES_TYPE_TO_ISSUE_TYPE = {
+    "Annual": "Annual",
+    "Trade Paperback": "Trade Paperback",
+    "Graphic Novel": "Trade Paperback",
+    "Hardcover": "Hardcover",
+    "Omnibus": "Hardcover",
+}
+# Capítulos digitales: no aplican a una pull list (igual que con LoCG).
+SKIPPED_SERIES_TYPES = {"Digital Chapter"}
 
 
-class _LoCGClient(Comic_Geeks):
-    """Omite la validación de sesión con la home page de LoCG."""
-
-    def __init__(self, ci_session: str):
+class MetronClient:
+    def __init__(self, user: str, password: str):
         self._session = requests.Session()
-        self._session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-        })
-        self._session.authenticated = True
-        self._session.cookies.set(
-            "ci_session", ci_session,
-            domain="leagueofcomicgeeks.com", path="/",
-        )
+        self._session.auth = (user, password)
+        self._session.headers.update({"User-Agent": USER_AGENT})
 
-    def _fetch_releases_page(self, date_str: str, format_id: str) -> list[Issue]:
-        """Un request: todos los releases de un formato para una semana."""
-        url = (
-            "https://leagueofcomicgeeks.com/comic/get_comics"
-            f"?list=releases&view=thumbs&format[]={format_id}"
-            f"&date_type=week&date={date_str}&order=pulls"
-        )
-        r = self._session.get(url).json()
-        if r["count"] == 0:
-            return []
-
-        soup = BeautifulSoup(r["list"], features="lxml")
-        content = soup.find(id="comic-list-block")
-        if not content:
-            return []
-
-        issues = []
-        for comic in content.find_all("li"):
-            a = comic.find("a")
-            if not a:
-                continue
-            price_el = comic.find(class_="price")
-            price = (
-                float(price_el.text.split("·")[1].strip()[1:])
-                if price_el and "·" in price_el.text
-                else "Unknown"
-            )
-            name_el = comic.find(class_="title")
-            date_el = comic.find(class_="date")
-            pub_el = comic.find(class_="publisher")
-            img_el = comic.find("img")
-
-            issue = Issue(issue_id=int(a["href"].split("/")[2]), session=self._session)
-            issue.name = name_el.text.strip() if name_el else ""
-            issue.url = a["href"]
-            issue.store_date = date_el["data-date"] if date_el else None
-            issue.price = price
-            issue.publisher = pub_el.text.strip() if pub_el else ""
-            issue.cover = img_el["data-src"] if img_el else None
-            issue.community = {
-                "rating": comic.get("data-community", 0),
-                "pull": comic.get("data-pulls", 0),
-            }
-            issues.append(issue)
-        return issues
-
-    def new_releases(self, date: datetime = "now") -> list[Issue]:  # type: ignore[override]
-        """Fetches all formats via separate requests, tagging each issue with _issue_type."""
-        if date == "now":
-            date = datetime.now()
-        date_str = f"{date.month}/{date.day}/{date.year}"
-
-        all_issues: list[Issue] = []
-        seen_ids: set[int] = set()
-
-        for format_id, issue_type in LOCG_FORMATS:
-            page = self._fetch_releases_page(date_str, format_id)
-            for issue in page:
-                if issue.issue_id not in seen_ids:
-                    seen_ids.add(issue.issue_id)
-                    issue._issue_type = issue_type
-                    all_issues.append(issue)
+    def get(self, url: str, params: dict | None = None) -> dict:
+        """GET con pausa entre peticiones y reintentos ante 429 / 5xx."""
+        if not url.startswith("http"):
+            url = f"{METRON_API}{url}"
+        for attempt in range(1, MAX_RETRIES + 1):
+            r = self._session.get(url, params=params, timeout=60)
             time.sleep(REQUEST_DELAY)
+            if r.status_code == 429 or r.status_code >= 500:
+                wait = int(r.headers.get("Retry-After", 0)) or 30 * attempt
+                print(f"  Metron {r.status_code}; reintento {attempt}/{MAX_RETRIES} en {wait}s", flush=True)
+                time.sleep(wait)
+                continue
+            r.raise_for_status()
+            return r.json()
+        raise RuntimeError(f"Metron no respondió tras {MAX_RETRIES} intentos: {url}")
 
-        return all_issues
+    def issues(self, publisher_id: int, after: date, before: date) -> list[dict]:
+        """Todos los números de una editorial en un rango de fechas de salida (paginado)."""
+        data = self.get("/issue/", {
+            "publisher_id": publisher_id,
+            "store_date_range_after": after.isoformat(),
+            "store_date_range_before": before.isoformat(),
+        })
+        results = list(data.get("results", []))
+        while data.get("next"):
+            data = self.get(data["next"])
+            results.extend(data.get("results", []))
+        return results
+
+    def series_type(self, metron_series_id: int) -> str | None:
+        data = self.get(f"/series/{metron_series_id}/")
+        st = data.get("series_type") or {}
+        return st.get("name")
 
 
 def _add_months(d: date, n: int) -> date:
@@ -140,36 +98,15 @@ def _add_months(d: date, n: int) -> date:
     return d.replace(year=y, month=m, day=1)
 
 
-def _week_dates_in_window() -> list[datetime]:
-    today = date.today()
+def window_bounds(today: date | None = None) -> tuple[date, date]:
+    """Primer día del mes -3 y último día del mes +3 (meses completos)."""
+    today = today or date.today()
     start = _add_months(today, -WINDOW_MONTHS)
-    # Last day of the month WINDOW_MONTHS ahead (not just the 1st)
     end = _add_months(today, WINDOW_MONTHS + 1) - timedelta(days=1)
-
-    weeks = []
-    current = start
-    while current <= end:
-        weeks.append(datetime(current.year, current.month, current.day))
-        current += timedelta(weeks=1)
-    return weeks
+    return start, end
 
 
-def _parse_date(raw) -> str | None:
-    if raw is None:
-        return None
-    try:
-        if isinstance(raw, int):
-            return date.fromtimestamp(raw).isoformat()
-        s = str(raw).strip()
-        if s.isdigit():
-            return date.fromtimestamp(int(s)).isoformat()
-        return str(datetime.strptime(s, "%Y-%m-%d").date())
-    except Exception:
-        return None
-
-
-# Postgres no admite NUL ni caracteres de control en columnas text; si llegan
-# en el HTML scrapeado, Supabase rechaza el upsert entero con 400 Bad Request.
+# Postgres no admite NUL ni caracteres de control en columnas text.
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -178,99 +115,72 @@ def _clean(s) -> str | None:
         return None
     if not isinstance(s, str):
         s = str(s)
-    # Garantiza texto codificable en UTF-8 (elimina surrogates sueltos y otros
-    # caracteres no representables que provocan 400 Bad Request en Supabase).
     s = s.encode("utf-8", "ignore").decode("utf-8", "ignore")
-    return _CONTROL_CHARS.sub("", s)
+    return _CONTROL_CHARS.sub("", s).strip()
 
 
-def _cover_url(cover) -> str | None:
-    if cover is None:
-        return None
-    if isinstance(cover, str):
-        return cover
-    if isinstance(cover, dict):
-        return cover.get("image") or cover.get("url")
-    return None
+def fetch_window(
+    known_types: dict[int, str] | None = None,
+    publishers: dict[int, str] | None = None,
+    start: date | None = None,
+    end: date | None = None,
+) -> list[dict]:
+    """Descarga los números de la ventana para las editoriales configuradas.
 
+    known_types: {series_id (desplazado): series_type} ya guardados en BD, para
+    no volver a consultar el tipo de cada serie en cada run.
+    """
+    client = MetronClient(os.environ["METRON_USER"].strip(), os.environ["METRON_PASS"].strip())
+    known = dict(known_types or {})
+    publishers = publishers or PUBLISHERS
+    if start is None or end is None:
+        start, end = window_bounds()
 
-def _synthetic_series_id(series_name: str, publisher_name: str) -> int:
-    """ID negativo estable para series donde no se puede obtener el ID de LoCG."""
-    raw = f"{series_name}|{publisher_name}".lower().encode()
-    return -(int(hashlib.sha256(raw).hexdigest(), 16) % (2 ** 52))
+    print(f"  Ventana {start} → {end}, {len(publishers)} editoriales", flush=True)
 
-
-def fetch_window(known_series: dict[str, int] | None = None) -> list[dict]:
-    client = _LoCGClient(os.environ["LOCG_CI_SESSION"])
-
-    known = known_series or {}
-    seen_ids: set[int] = set()
-    series_cache: dict[str, int] = {}
     issues: list[dict] = []
-    reused = 0   # series cuyo id se reutilizó de la BD (sin issue_info)
-    fetched = 0  # series nuevas consultadas con issue_info
+    reused = fetched = skipped = 0
 
-    week_dates = _week_dates_in_window()
-    print(f"  Fetching {len(week_dates)} weeks × {len(LOCG_FORMATS)} formats...", flush=True)
+    for pub_id, pub_name in publishers.items():
+        raw = client.issues(pub_id, start, end)
+        print(f"  {pub_name}: {len(raw)} números", flush=True)
 
-    for week_dt in week_dates:
-        print(f"  Week {week_dt.date()}...", flush=True)
-        # new_releases() already sleeps between format requests internally
-        week_releases = client.new_releases(date=week_dt)
-        time.sleep(REQUEST_DELAY)
-
-        for issue in week_releases:
-            if issue.issue_id in seen_ids:
+        for it in raw:
+            series = it.get("series") or {}
+            if not series.get("id") or not it.get("store_date"):
                 continue
+            series_id = METRON_OFFSET + int(series["id"])
 
-            publisher_name = (issue.publisher or "").strip()
+            if series_id in known:
+                stype = known[series_id]
+                reused += 1
+            else:
+                try:
+                    stype = client.series_type(int(series["id"]))
+                except Exception as e:
+                    print(f"  Nota: sin tipo para '{series.get('name')}' ({e})", flush=True)
+                    stype = None
+                known[series_id] = stype
+                fetched += 1
 
-            if not _publisher_allowed(publisher_name):
+            if stype in SKIPPED_SERIES_TYPES:
+                skipped += 1
                 continue
-
-            seen_ids.add(issue.issue_id)
-
-            full_title = issue.name or ""
-            series_name, issue_number, _ = parse_title(full_title)
-            series_name = series_name.strip()
-
-            cache_key = f"{series_name}|{publisher_name}".lower()
-            description = None
-
-            if cache_key not in series_cache:
-                if cache_key in known:
-                    # Ya conocemos esta serie de un run anterior: reutilizamos su
-                    # series_id y nos saltamos issue_info (lo más lento del worker).
-                    series_cache[cache_key] = known[cache_key]
-                    reused += 1
-                else:
-                    try:
-                        full = client.issue_info(issue.issue_id)
-                        pagination = full.series_pagination
-                        series_obj = pagination.get("series") if isinstance(pagination, dict) else None
-                        series_cache[cache_key] = series_obj.series_id if series_obj else _synthetic_series_id(series_name, publisher_name)
-                        description = full.description
-                    except Exception as e:
-                        # Casos límite del parseo de comicgeeks (TPB sin número, fechas
-                        # pre-1970 en Windows...). No es pérdida de dato: se usa un
-                        # series_id sintético determinista como fallback de diseño.
-                        series_cache[cache_key] = _synthetic_series_id(series_name, publisher_name)
-                        print(f"  Nota: series_id sintético para '{series_name}' ({publisher_name}) — issue_info no parseable ({e})", flush=True)
-                    fetched += 1
-                    time.sleep(REQUEST_DELAY)
 
             issues.append({
-                "issue_id": issue.issue_id,
-                "series_id": series_cache[cache_key],
-                "series_name": _clean(series_name),
-                "publisher_name": _clean(publisher_name),
-                "issue_number": _clean(issue_number or ""),
-                "release_date": _parse_date(issue.store_date),
-                "cover_url": _clean(_cover_url(issue.cover)),
-                "price": _clean(str(issue.price)) if issue.price not in (None, "Unknown") else None,
-                "description": _clean(description),
-                "issue_type": getattr(issue, "_issue_type", "Regular Issue"),
+                "issue_id": METRON_OFFSET + int(it["id"]),
+                "series_id": series_id,
+                "series_name": _clean(series.get("name")),
+                "series_type": stype,
+                "publisher_name": pub_name,
+                "issue_number": _clean(it.get("number") or ""),
+                "release_date": it["store_date"],
+                "cover_url": _clean(it.get("image")),
+                "price": None,
+                "description": None,
+                "issue_type": SERIES_TYPE_TO_ISSUE_TYPE.get(stype or "", "Regular Issue"),
             })
 
-    print(f"  Series: {reused} reutilizadas de BD, {fetched} consultadas con issue_info.", flush=True)
+    print(f"  Series: {reused} con tipo ya conocido, {fetched} consultadas. "
+          f"Descartados {skipped} capítulos digitales.", flush=True)
     return issues
