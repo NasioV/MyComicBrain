@@ -1,40 +1,47 @@
+import re
 from datetime import date, datetime, timezone
 
 from supabase import Client
 
-WINDOW_MONTHS = 3
+from fetcher import METRON_OFFSET, window_bounds
+
 UPSERT_BATCH = 200
 SELECT_PAGE = 1000
+DELETE_BATCH = 100
+
+PUBLISHER_GROUP_MAP = {
+    "DC Comics": "DC",
+    "Marvel Comics": "MARVEL",
+}
 
 
-def fetch_known_series(db: Client) -> dict[str, int]:
-    """Mapa {nombre|editorial (minúsculas): series_id} de las series ya conocidas.
+def _publisher_group(name: str) -> str:
+    return PUBLISHER_GROUP_MAP.get(name, "OTROS")
 
-    Permite reutilizar el series_id entre runs y saltarse la llamada issue_info()
-    (lo más lento del worker) para series que ya están en la BD.
-    """
-    pubs = db.table("publishers").select("publisher_id, name").execute().data
-    pub_name = {p["publisher_id"]: p["name"] for p in pubs}
 
-    known: dict[str, int] = {}
+def _select_all(db: Client, table: str, columns: str, **eq) -> list[dict]:
+    """Lee una tabla entera paginando (PostgREST devuelve máx. 1000 filas)."""
+    rows: list[dict] = []
     offset = 0
     while True:
-        rows = (
-            db.table("series")
-            .select("series_id, name, publisher_id")
-            .range(offset, offset + SELECT_PAGE - 1)
-            .execute()
-            .data
-        )
-        if not rows:
-            break
-        for r in rows:
-            pname = pub_name.get(r["publisher_id"], "")
-            known[f"{r['name']}|{pname}".lower()] = r["series_id"]
-        if len(rows) < SELECT_PAGE:
-            break
+        q = db.table(table).select(columns)
+        for col, val in eq.items():
+            q = q.eq(col, val)
+        page = q.range(offset, offset + SELECT_PAGE - 1).execute().data
+        rows.extend(page)
+        if len(page) < SELECT_PAGE:
+            return rows
         offset += SELECT_PAGE
-    return known
+
+
+def fetch_known_series(db: Client) -> dict[int, str]:
+    """{series_id: series_type} de las series de Metron ya guardadas.
+
+    Permite saltarse la consulta del tipo de serie (una petición por serie)
+    para todas las que ya conocemos de runs anteriores.
+    """
+    rows = _select_all(db, "series", "series_id, series_type", source="metron")
+    return {r["series_id"]: r["series_type"] for r in rows if r.get("series_type")}
 
 
 def _batch_upsert(db: Client, table: str, rows: list[dict], on_conflict: str) -> None:
@@ -53,22 +60,79 @@ def _batch_upsert(db: Client, table: str, rows: list[dict], on_conflict: str) ->
                     key = row.get("issue_id") or row.get("series_id") or row.get("name")
                     print(f"    Fila saltada ({table} {key}): {e2}", flush=True)
 
-PUBLISHER_GROUP_MAP = {
-    "DC Comics": "DC",
-    "Marvel Comics": "MARVEL",
-}
+
+# ── Adopción de pulls antiguos de LoCG ──────────────────────────────────────
+
+def _norm_name(s: str) -> str:
+    s = (s or "").lower().replace("&", "and")
+    s = re.sub(r"^the\s+", "", s)
+    return re.sub(r"[^a-z0-9]", "", s)
 
 
-def _publisher_group(name: str) -> str:
-    return PUBLISHER_GROUP_MAP.get(name, "OTROS")
+def _norm_number(s: str) -> str:
+    s = (s or "").strip().lstrip("#").lower()
+    return str(int(s)) if s.isdigit() else s
 
 
-def _add_months(d: date, n: int) -> date:
-    m = d.month + n
-    y = d.year + (m - 1) // 12
-    m = ((m - 1) % 12) + 1
-    return d.replace(year=y, month=m, day=1)
+def _adopt_locg_pulls(db: Client, issues: list[dict]) -> int:
+    """Re-enlaza a Metron los pulls que vinieron de LoCG.
 
+    Busca cada pull antiguo (issue_id de LoCG) en los números de Metron de la
+    ventana por (nombre de serie, número, grupo). Si lo encuentra, le pone el
+    issue_id/series_id de Metron y refresca fecha y portada, así vuelve a
+    actualizarse solo. Nunca toca format ni status.
+    """
+    index: dict[tuple, list[dict]] = {}
+    for i in issues:
+        key = (_norm_name(i["series_name"]), _norm_number(i["issue_number"]),
+               _publisher_group(i["publisher_name"]))
+        index.setdefault(key, []).append(i)
+
+    pulls = _select_all(
+        db, "pulls",
+        "id, issue_id, issue_number, release_date, series(name, publishers(publisher_group))",
+    )
+    adopted = 0
+    for p in pulls:
+        old = p.get("issue_id")
+        if old is None or old >= METRON_OFFSET:
+            continue  # manual o ya de Metron
+        series = p.get("series") or {}
+        group = (series.get("publishers") or {}).get("publisher_group")
+        key = (_norm_name(series.get("name")), _norm_number(p["issue_number"]), group)
+        candidates = index.get(key)
+        if not candidates:
+            continue
+        # Si hay varias (p. ej. dos volúmenes), la de fecha más cercana
+        pull_date = date.fromisoformat(p["release_date"])
+        best = min(candidates, key=lambda c: abs((date.fromisoformat(c["release_date"]) - pull_date).days))
+        try:
+            db.table("pulls").update({
+                "issue_id": best["issue_id"],
+                "series_id": best["series_id"],
+                "release_date": best["release_date"],
+                "cover_url": best["cover_url"],
+            }).eq("id", p["id"]).execute()
+            adopted += 1
+        except Exception as e:
+            # Ej.: ya existe un pull de esa serie+número de Metron (UNIQUE)
+            print(f"    No se pudo adoptar pull {p['id']}: {e}", flush=True)
+    return adopted
+
+
+def _delete_orphan_locg_series(db: Client) -> int:
+    """Borra las series de LoCG que ya no usa ningún pull (tras la adopción)."""
+    locg = {r["series_id"] for r in _select_all(db, "series", "series_id", source="locg")}
+    if not locg:
+        return 0
+    used = {r["series_id"] for r in _select_all(db, "pulls", "series_id")}
+    orphans = sorted(locg - used)
+    for i in range(0, len(orphans), DELETE_BATCH):
+        db.table("series").delete().in_("series_id", orphans[i:i + DELETE_BATCH]).execute()
+    return len(orphans)
+
+
+# ── Escritura principal ─────────────────────────────────────────────────────
 
 def upsert_all(db: Client, issues: list[dict]) -> int:
     if not issues:
@@ -76,40 +140,30 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
 
     synced_at = datetime.now(timezone.utc).isoformat()
 
-    # 1. Publishers — upsert por name (publisher_id lo asigna Postgres automáticamente)
-    pub_names = list({i["publisher_name"] for i in issues if i["publisher_name"]})
-    pub_rows = [{"name": n, "publisher_group": _publisher_group(n)} for n in pub_names]
-    if pub_rows:
-        db.table("publishers").upsert(pub_rows, on_conflict="name").execute()
-
-    # Leer IDs asignados para usarlos al insertar series
-    pub_result = (
-        db.table("publishers")
-        .select("publisher_id, name")
-        .in_("name", pub_names)
-        .execute()
-    )
-    publisher_id_map: dict[str, int] = {
-        row["name"]: row["publisher_id"] for row in pub_result.data
+    # 1. Publishers — upsert por name (publisher_id lo asigna Postgres)
+    pub_names = sorted({i["publisher_name"] for i in issues})
+    db.table("publishers").upsert(
+        [{"name": n, "publisher_group": _publisher_group(n)} for n in pub_names],
+        on_conflict="name",
+    ).execute()
+    publisher_id_map = {
+        row["name"]: row["publisher_id"]
+        for row in db.table("publishers").select("publisher_id, name").in_("name", pub_names).execute().data
     }
 
-    # 2. Series — upsert por series_id (real de LoCG o sintético negativo)
-    series_seen: dict[int, dict] = {}
+    # 2. Series de Metron (con su tipo, para no reconsultarlo en el próximo run)
+    series_rows: dict[int, dict] = {}
     for i in issues:
-        sid = i["series_id"]
-        if sid is None or sid in series_seen:
-            continue
-        pub_id = publisher_id_map.get(i["publisher_name"])
-        series_seen[sid] = {
-            "series_id": sid,
+        series_rows.setdefault(i["series_id"], {
+            "series_id": i["series_id"],
             "name": i["series_name"],
-            "publisher_id": pub_id,
-            "source": "locg",
-        }
-    if series_seen:
-        _batch_upsert(db, "series", list(series_seen.values()), "series_id")
+            "publisher_id": publisher_id_map[i["publisher_name"]],
+            "source": "metron",
+            "series_type": i["series_type"],
+        })
+    _batch_upsert(db, "series", list(series_rows.values()), "series_id")
 
-    # 3. Releases — upsert por issue_id en lotes para evitar payload excesivo
+    # 3. Releases
     releases = [
         {
             "issue_id": i["issue_id"],
@@ -118,56 +172,42 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
             "release_date": i["release_date"],
             "cover_url": i["cover_url"],
             "price": i["price"],
-            "issue_type": i.get("issue_type", "Regular Issue"),
+            "description": i["description"],
+            "issue_type": i["issue_type"],
             "synced_at": synced_at,
         }
         for i in issues
-        if i["series_id"] is not None and i["release_date"]
     ]
     print(f"  Upserting {len(releases)} releases in batches of {UPSERT_BATCH}...", flush=True)
-    if releases:
-        _batch_upsert(db, "releases", releases, "issue_id")
+    _batch_upsert(db, "releases", releases, "issue_id")
 
-    # 4. Poda: borrar releases fuera de la ventana ±3 meses
-    today = date.today()
-    window_start = _add_months(today, -WINDOW_MONTHS)
-    window_end_cutoff = _add_months(today, WINDOW_MONTHS + 1)
-
+    # 4. Poda: fuera de la ventana, y cualquier release antiguo de LoCG
+    window_start, window_end = window_bounds()
     db.table("releases").delete().lt("release_date", str(window_start)).execute()
-    db.table("releases").delete().gte("release_date", str(window_end_cutoff)).execute()
+    db.table("releases").delete().gt("release_date", str(window_end)).execute()
+    db.table("releases").delete().gt("issue_id", 0).lt("issue_id", METRON_OFFSET).execute()
 
-    # 5. Refresco de pulls en ventana — solo toca fecha/portada/número, nunca format/status.
-    # pulls es una tabla pequeña (selección personal): la leemos entera y filtramos en
-    # Python. Antes se hacía un in_(miles de ids) que generaba una URL gigante y un
-    # 400 Bad Request del servidor.
-    in_window = {
-        i["issue_id"]: i for i in issues
-        if i["release_date"]
-        and window_start <= date.fromisoformat(i["release_date"]) < window_end_cutoff
-    }
-    if in_window:
-        offset = 0
-        while True:
-            pulls = (
-                db.table("pulls")
-                .select("id, issue_id")
-                .range(offset, offset + SELECT_PAGE - 1)
-                .execute()
-                .data
-            )
-            if not pulls:
-                break
-            for pull in pulls:
-                fresh = in_window.get(pull["issue_id"])
-                if not fresh:
-                    continue
-                db.table("pulls").update({
-                    "release_date": fresh["release_date"],
-                    "cover_url": fresh["cover_url"],
-                    "issue_number": fresh["issue_number"],
-                }).eq("id", pull["id"]).execute()
-            if len(pulls) < SELECT_PAGE:
-                break
-            offset += SELECT_PAGE
+    # 5. Adopción de pulls de LoCG (antes del refresco, para que entren en él)
+    adopted = _adopt_locg_pulls(db, issues)
+    print(f"  Pulls de LoCG adoptados en Metron: {adopted}", flush=True)
+
+    # 6. Refresco de pulls en ventana — solo fecha/portada/número, nunca format/status.
+    # pulls es pequeña: se lee entera y se filtra en Python (un in_ con miles de
+    # ids genera una URL demasiado larga y un 400 Bad Request).
+    by_issue = {i["issue_id"]: i for i in issues}
+    for pull in _select_all(db, "pulls", "id, issue_id"):
+        fresh = by_issue.get(pull["issue_id"])
+        if not fresh:
+            continue
+        db.table("pulls").update({
+            "release_date": fresh["release_date"],
+            "cover_url": fresh["cover_url"],
+            "issue_number": fresh["issue_number"],
+        }).eq("id", pull["id"]).execute()
+
+    # 7. Limpieza de series de LoCG sin pulls (evita duplicados en el autocompletado)
+    removed = _delete_orphan_locg_series(db)
+    if removed:
+        print(f"  Series antiguas de LoCG eliminadas: {removed}", flush=True)
 
     return len(releases)
