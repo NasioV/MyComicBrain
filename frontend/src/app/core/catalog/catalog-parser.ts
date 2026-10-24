@@ -195,8 +195,74 @@ function isDcTitleLine(l: string): boolean {
   return isUpperLine(l) && !DC_NOISE.test(l) && !/[!?]$/.test(l) && l.length <= 70;
 }
 
+/**
+ * DC: el checklist del final ("Available Wednesday, January 6, 2027" + títulos)
+ * es la lista oficial y completa → fuente principal de títulos, números y fechas.
+ * Las fichas solo aportan precio y si es Hardcover/Softcover. Sin checklist,
+ * se usan las fichas tal cual.
+ */
 function parseDC(pages: string[][]): CatalogParseResult {
   const catalogMonth = findCatalogMonth(pages, /ON SALE IN ([A-Z]+) (\d{4})/) ?? firstOfMonth(new Date().toISOString());
+  const fromBlocks = parseDCBlocks(pages, catalogMonth);
+  const fromChecklist = parseDCChecklist(pages, catalogMonth);
+  if (fromChecklist.length === 0) return { publisher: 'DC Comics', catalogMonth, items: fromBlocks };
+
+  // Cruce tolerante checklist ↔ fichas: ignora "THE" y, si una serie solo tiene
+  // una ficha, la usa aunque el número no cuadre (el catálogo trae erratas, p. ej.
+  // "Detective Comics #1116" en el checklist y "#1117" en la ficha).
+  const loose = (s: string) => normTitle(s.replace(/\bTHE\b/gi, ''));
+  const byKey = new Map(fromBlocks.map(b => [itemKey(b), b]));
+  const byLooseKey = new Map(fromBlocks.map(b => [loose(b.seriesName) + '#' + b.issueNumber, b]));
+  const bySeries = new Map<string, CatalogItem[]>();
+  for (const b of fromBlocks) {
+    const k = loose(b.seriesName);
+    bySeries.set(k, [...(bySeries.get(k) ?? []), b]);
+  }
+  const items = fromChecklist.map(c => {
+    const sameSeries = bySeries.get(loose(c.seriesName))?.filter(b => (b.issueNumber !== '') === (c.issueNumber !== ''));
+    const b = byKey.get(itemKey(c))
+      ?? byLooseKey.get(loose(c.seriesName) + '#' + c.issueNumber)
+      ?? (sameSeries?.length === 1
+        ? sameSeries[0] : undefined);
+    if (!b) return c;
+    const issueType = c.issueNumber ? c.issueType : b.issueType;  // HC/TPB según la ficha
+    return { ...c, price: b.price, issueType };
+  });
+  return { publisher: 'DC Comics', catalogMonth, items: dedupe(items) };
+}
+
+const DC_AVAILABLE = /^Available \w+day,\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/i;
+
+function parseDCChecklist(pages: string[][], catalogMonth: string): CatalogItem[] {
+  const page = pages.find(p => p.some(l => /^CHECKLIST$/.test(l)) && p.some(l => DC_AVAILABLE.test(l)));
+  if (!page) return [];
+  const items: CatalogItem[] = [];
+  let date: string | null = null;
+  let collected = false;
+  for (const raw of page) {
+    if (/^PERIODICALS:/i.test(raw)) { collected = false; continue; }
+    if (/^COLLECTED EDITION/i.test(raw)) { collected = true; continue; }
+    const a = raw.match(DC_AVAILABLE);
+    if (a) {
+      const m = MONTHS.indexOf(a[1].toUpperCase()) + 1;
+      date = m > 0 ? ymd(Number(a[3]), m, Number(a[2])) : null;
+      continue;
+    }
+    if (!date) continue;
+    // "Absolute Wonder Woman #28 3v" → quita el nº de variantes
+    const title = raw.replace(/\s+\d+v$/, '').replace(';', ':').trim();
+    if (!title || !/[a-z]/i.test(title)) continue;
+    if (!collected && !/#\d/.test(title)) continue;
+    const upper = title.toUpperCase();
+    const type: IssueType | undefined = collected
+      ? (/\b(OMNIBUS|DELUXE|ABSOLUTE|COMPENDIUM|HARDCOVER)\b/.test(upper) ? 'Hardcover' : 'Trade Paperback')
+      : undefined;
+    items.push(makeItem('DC Comics', upper, date, catalogMonth, null, type));
+  }
+  return items;
+}
+
+function parseDCBlocks(pages: string[][], catalogMonth: string): CatalogItem[] {
   const items: CatalogItem[] = [];
 
   for (const lines of pages) {
@@ -207,20 +273,25 @@ function parseDC(pages: string[][]): CatalogParseResult {
       const block = lines.slice(from, a + 1);
 
       // Título: líneas en mayúscula justo encima de los créditos ("Written by…").
-      // Puede ocupar 2-3 líneas; se para al llegar al eslogan que suele ir encima.
+      // Puede ocupar 2-3 líneas (a veces el número va solo: "ABSOLUTE WONDER
+      // WOMAN" + "#28"); se para al llegar al eslogan que suele ir encima.
       let title = '';
       const c = block.findIndex(l => DC_CREDITS.test(l));
       if (c > 0) {
         const parts: string[] = [];
         for (let i = c - 1; i >= 0 && parts.length < 4; i--) {
-          if (!isDcTitleLine(block[i]) || DC_TAGLINE.test(block[i])) break;
+          const numberOnly = /^#\d+\S*$/.test(block[i]);
+          if (!numberOnly && (!isDcTitleLine(block[i]) || DC_TAGLINE.test(block[i]))) break;
           parts.unshift(block[i]);
         }
         title = parts.join(' ');
       }
-      // Destacados: el título aparece después de la sinopsis
+      // Destacados: el título aparece después de la sinopsis. No vale el título
+      // de la ficha siguiente (ese va seguido de sus propios créditos).
       if (!title) {
-        title = lines.slice(a + 1, to).find(l => isDcTitleLine(l) && /#\d/.test(l)) ?? '';
+        title = lines.slice(a + 1, to).find((l, j, rest) =>
+          isDcTitleLine(l) && /#\d/.test(l)
+          && !rest.slice(j + 1, j + 4).some(x => DC_CREDITS.test(x))) ?? '';
       }
       if (!title) return;
 
@@ -237,12 +308,12 @@ function parseDC(pages: string[][]): CatalogParseResult {
       items.push(makeItem('DC Comics', title, date, catalogMonth, price ? Number(price[1]) : null, forced));
     });
   }
-  return { publisher: 'DC Comics', catalogMonth, items: dedupe(items) };
+  return dedupe(items);
 }
 
 // ── Marvel (PRH) ────────────────────────────────────────────────────────────
 
-const MARVEL_TITLE = /^[A-Z0-9‘’'"(][A-Z0-9 ‘’'":&|.,\-–!/()]*#\d+[A-Z0-9 ‘’'():\-–.#]*$/;
+const MARVEL_TITLE = /^[A-Z0-9‘’'"(][A-Z0-9 ‘’'":&|.,\-–—!?/()]*#\d+[A-Z0-9 ‘’'():\-–—.#]*$/;
 /** Ficha real: tras el título vienen los autores, "NOMBRE (W)" / "NOMBRE (A)". */
 const MARVEL_CREDITS = /\((W|A|W\/A)\)/;
 const MARVEL_FOC = /FOC [\d/]+,\s*ON-SALE (\d{1,2})\/(\d{1,2})\/(\d{2,4})/;
@@ -295,13 +366,17 @@ function parseMarvel(pages: string[][]): CatalogParseResult {
   // 2) Cuerpo del catálogo: fichas (título + autores) con su precio
   for (const lines of pages) {
     if (lines.some(l => /CHECKLIST/.test(l))) continue;
+    // Número solo en su línea, con la serie en la anterior: "THE AMAZING VENOM" + "#5 (OF 5)"
+    const numberOnly = (i: number) => /^#\d+/.test(lines[i])
+      && isUpperLine(lines[i - 1] ?? '') && !(lines[i - 1] ?? '').includes('#');
     const titleIdx = lines
-      .map((l, i) => (isMarvelTitle(l) && lines.slice(i + 1, i + 4).some(x => MARVEL_CREDITS.test(x)) ? i : -1))
+      .map((l, i) => ((isMarvelTitle(l) || numberOnly(i))
+        && lines.slice(i + 1, i + 4).some(x => MARVEL_CREDITS.test(x)) ? i : -1))
       .filter(i => i >= 0);
 
     titleIdx.forEach((i, k) => {
-      let title = lines[i];
-      const prev = lines[i - 1] ?? '';
+      let title = numberOnly(i) ? `${lines[i - 1]} ${lines[i]}` : lines[i];
+      const prev = numberOnly(i) ? '' : (lines[i - 1] ?? '');
       const next = lines[i + 1] ?? '';
       // Título partido en dos líneas: si uniéndolo con la anterior o la siguiente
       // coincide con un título del checklist ("SPECTACULAR" + "SPIDER-MAN #8",
