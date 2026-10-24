@@ -13,3 +13,6 @@ dist/
 # Misc
 .DS_Store
 *.log
+
+# Catálogos PDF de previews (pesados; se leen en local, no se suben)
+previews/

@@ -5,6 +5,7 @@ import { Calendar } from './pages/calendar/calendar';
 import { NewReleases } from './pages/new-releases/new-releases';
 import { AddToList } from './pages/add-to-list/add-to-list';
 import { Settings } from './pages/settings/settings';
+import { PullList } from './pages/pull-list/pull-list';
 
 export const routes: Routes = [
   { path: 'login', component: Login },
@@ -15,5 +16,6 @@ export const routes: Routes = [
   { path: 'new-releases', component: NewReleases, canActivate: [authGuard] },
   { path: 'add',    component: AddToList,    canActivate: [authGuard] },
   { path: 'settings', component: Settings,   canActivate: [authGuard] },
+  { path: 'pull-list', component: PullList,  canActivate: [authGuard] },
   { path: '**', redirectTo: 'dc' },
 ];

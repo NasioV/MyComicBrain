@@ -26,6 +26,8 @@ export interface PullRow {
   cover_url: string | null;
   format: PullFormat;
   status: PullStatus;
+  /** false = el catálogo solo daba el mes ("Fecha por confirmar"). */
+  date_confirmed: boolean;
   series: {
     name: string;
     publishers: {
@@ -33,6 +35,22 @@ export interface PullRow {
       publisher_group: PublisherGroup;
     };
   };
+}
+
+/** Número solicitado en un catálogo de previews (tabla `previews`). */
+export interface PreviewRow {
+  id: string;
+  publisher_id: number;
+  item_key: string;
+  series_name: string;
+  issue_number: string;
+  title: string;
+  issue_type: string;
+  release_date: string | null;
+  release_month: string;
+  price: number | null;
+  catalog: string | null;
+  publishers: { name: string; publisher_group: PublisherGroup };
 }
 
 export interface SeriesResult {

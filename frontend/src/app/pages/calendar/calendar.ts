@@ -3,28 +3,9 @@ import { ActivatedRoute } from '@angular/router';
 import { SupabaseService } from '../../core/supabase';
 import { PublisherGroup, PullFormat, PullRow, PullStatus } from '../../core/types';
 import { VIEW_KEY } from '../../core/profile';
+import { UNCONFIRMED_KEY, UNCONFIRMED_LABEL, mondayOf, weekLabel } from '../../core/weeks';
 
 interface WeekGroup { key: string; label: string; pulls: PullRow[]; }
-
-/** Lunes (ISO) de la semana que contiene la fecha, como 'YYYY-MM-DD'. */
-function mondayOf(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  const dow = (dt.getDay() + 6) % 7; // lunes = 0
-  dt.setDate(dt.getDate() - dow);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-}
-
-function weekLabel(mondayIso: string): string {
-  const [y, m, d] = mondayIso.split('-').map(Number);
-  const start = new Date(y, m - 1, d);
-  const end = new Date(y, m - 1, d + 6);
-  const mon = (dt: Date) => dt.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
-  if (start.getMonth() === end.getMonth()) {
-    return `Semana ${start.getDate()}–${end.getDate()} ${mon(start)}`;
-  }
-  return `Semana ${start.getDate()} ${mon(start)} – ${end.getDate()} ${mon(end)}`;
-}
 
 @Component({
   selector: 'app-calendar',
@@ -67,11 +48,11 @@ export class Calendar implements OnInit {
   });
 
   // Agrupación por semanas: dentro de cada semana, pendientes primero (alfabético)
-  // y los leídos al final.
+  // y los leídos al final. Los de fecha por confirmar van en un bloque al final.
   weeks = computed<WeekGroup[]>(() => {
     const groups = new Map<string, PullRow[]>();
     for (const p of this.pulls()) {
-      const k = mondayOf(p.release_date);
+      const k = p.date_confirmed === false ? UNCONFIRMED_KEY : mondayOf(p.release_date);
       let arr = groups.get(k);
       if (!arr) { arr = []; groups.set(k, arr); }
       arr.push(p);
@@ -85,7 +66,7 @@ export class Calendar implements OnInit {
           if (al !== bl) return al - bl;                       // leídos al final
           return a.series.name.localeCompare(b.series.name);   // alfabético
         });
-        return { key, label: weekLabel(key), pulls: arr };
+        return { key, label: key === UNCONFIRMED_KEY ? UNCONFIRMED_LABEL : weekLabel(key), pulls: arr };
       });
   });
 

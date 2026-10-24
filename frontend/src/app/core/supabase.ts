@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
-import { PublisherGroup, PublisherOption, PullFormat, PullStatus, ReleaseRow, SeriesResult, SyncLog } from './types';
+import { PreviewRow, PublisherGroup, PublisherOption, PullFormat, PullStatus, ReleaseRow, SeriesResult, SyncLog } from './types';
 import { Profile } from './profile';
+import { CatalogItem, itemKey, normTitle } from './catalog/catalog-parser';
 
 async function computeManualSeriesId(name: string, publisherName: string): Promise<number> {
   const raw = `${name}|${publisherName}`.toLowerCase();
@@ -71,7 +72,7 @@ export class SupabaseService {
 
     return this.client
       .from('pulls')
-      .select('id, issue_number, release_date, cover_url, format, status, series!inner(name, publishers!inner(name, publisher_group))')
+      .select('id, issue_number, release_date, cover_url, format, status, date_confirmed, series!inner(name, publishers!inner(name, publisher_group))')
       .eq('user_id', session.user.id)
       .eq('series.publishers.publisher_group', group)
       .gte('release_date', start)
@@ -138,6 +139,8 @@ export class SupabaseService {
    * Automatismo v1: los pulls digitales cuya fecha ya ha llegado pasan de
    * 'no_salido' a 'descargar'. Una sola query global (todos los grupos/meses),
    * con la fecha LOCAL del navegador (Madrid). El worker nunca toca status.
+   * Ignora los de fecha por confirmar: se guardan con día 1 del mes y si no
+   * pasarían a 'descargar' antes de salir.
    */
   async autoUpgradeDigitalReleases() {
     const { data: { session } } = await this.client.auth.getSession();
@@ -150,6 +153,7 @@ export class SupabaseService {
       .eq('user_id', session.user.id)
       .eq('status', 'no_salido')
       .eq('format', 'digital')
+      .eq('date_confirmed', true)
       .lte('release_date', today);
   }
 
@@ -191,6 +195,7 @@ export class SupabaseService {
       release_date: releaseDate,
       format,
       status,
+      origin: 'manual',
     });
   }
 
@@ -233,6 +238,110 @@ export class SupabaseService {
       format,
       status,
     });
+  }
+
+  // ── Pull List (catálogos de previews) ─────────────────────────────────────
+
+  /** Guarda lo extraído de un catálogo. Reimportar el mismo PDF actualiza, no duplica. */
+  async savePreviews(items: CatalogItem[], catalog: string): Promise<{ saved: number; error: string | null }> {
+    const pubs = await this.getPublishers();
+    const pubId = new Map(pubs.map(p => [p.name, p.publisher_id]));
+    const rows = [];
+    for (const it of items) {
+      const publisher_id = pubId.get(it.publisher);
+      if (!publisher_id) return { saved: 0, error: `La editorial "${it.publisher}" no existe en la base de datos.` };
+      rows.push({
+        publisher_id,
+        item_key: itemKey(it),
+        series_name: it.seriesName,
+        issue_number: it.issueNumber,
+        title: it.title,
+        issue_type: it.issueType,
+        release_date: it.releaseDate,
+        release_month: it.releaseMonth,
+        price: it.price,
+        catalog,
+      });
+    }
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await this.client
+        .from('previews')
+        .upsert(rows.slice(i, i + 200), { onConflict: 'publisher_id,item_key' });
+      if (error) return { saved: i, error: error.message };
+    }
+    return { saved: rows.length, error: null };
+  }
+
+  async getPreviewsForMonth(year: number, month: number): Promise<PreviewRow[]> {
+    const start = `${year}-${String(month).padStart(2, '0')}-01`;
+    const { data } = await this.client
+      .from('previews')
+      .select('*, publishers!inner(name, publisher_group)')
+      .eq('release_month', start)
+      .order('series_name');
+    return (data ?? []) as unknown as PreviewRow[];
+  }
+
+  /** Meses (YYYY-MM-01) que tienen previews importadas, ordenados. */
+  async getPreviewMonths(): Promise<string[]> {
+    const { data } = await this.client.from('previews').select('release_month').limit(5000);
+    return [...new Set((data ?? []).map((r: { release_month: string }) => r.release_month))].sort();
+  }
+
+  /** {preview_id: formato} de las previews que ya están en mi lista. */
+  async getPreviewPulls(): Promise<Map<string, PullFormat>> {
+    const { data: { session } } = await this.client.auth.getSession();
+    if (!session) return new Map();
+    const { data } = await this.client
+      .from('pulls')
+      .select('preview_id, format')
+      .eq('user_id', session.user.id)
+      .not('preview_id', 'is', null);
+    return new Map((data ?? []).map((p: { preview_id: string; format: PullFormat }) => [p.preview_id, p.format]));
+  }
+
+  /** Serie existente de esa editorial con el mismo nombre (normalizado); si no hay, la crea. */
+  private async findOrCreateSeries(name: string, publisherId: number): Promise<number | null> {
+    const firstWord = name.split(/[\s:/]+/).find(w => w.length > 2) ?? name;
+    const { data } = await this.client
+      .from('series')
+      .select('series_id, name, source')
+      .eq('publisher_id', publisherId)
+      .ilike('name', `%${firstWord}%`)
+      .limit(200);
+    const key = normTitle(name);
+    const matches = (data ?? []).filter((s: { name: string }) => normTitle(s.name) === key);
+    // Preferimos la serie de Metron: así el pull ya apunta a la serie "buena"
+    const best = matches.find((s: { source: string }) => s.source === 'metron') ?? matches[0];
+    if (best) return best.series_id;
+
+    const pubs = await this.getPublishers();
+    const publisher = pubs.find(p => p.publisher_id === publisherId);
+    if (!publisher) return null;
+    const { seriesId } = await this.createSeries(name, publisher);
+    return seriesId;
+  }
+
+  async addPreviewToPull(preview: PreviewRow, format: PullFormat): Promise<{ error: string | null }> {
+    const { data: { session } } = await this.client.auth.getSession();
+    if (!session) return { error: 'No hay sesión.' };
+    const seriesId = await this.findOrCreateSeries(preview.series_name, preview.publisher_id);
+    if (seriesId === null) return { error: 'No se pudo crear la serie.' };
+    const status: PullStatus = format === 'digital' ? 'no_salido' : 'pedido';
+    const { error } = await this.client.from('pulls').insert({
+      user_id: session.user.id,
+      series_id: seriesId,
+      issue_id: null,
+      issue_number: preview.issue_number,
+      release_date: preview.release_date ?? preview.release_month,
+      date_confirmed: !!preview.release_date,
+      format,
+      status,
+      origin: 'preview',
+      preview_id: preview.id,
+    });
+    if (error?.code === '23505') return { error: 'Ya está en tu lista.' };
+    return { error: error?.message ?? null };
   }
 
   async getLastSync(): Promise<{ data: SyncLog | null; error: unknown }> {

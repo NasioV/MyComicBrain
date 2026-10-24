@@ -74,13 +74,17 @@ def _norm_number(s: str) -> str:
     return str(int(s)) if s.isdigit() else s
 
 
-def _adopt_locg_pulls(db: Client, issues: list[dict]) -> int:
-    """Re-enlaza a Metron los pulls que vinieron de LoCG.
+def _adopt_pulls(db: Client, issues: list[dict]) -> int:
+    """Enlaza con Metron los pulls que aún no lo están.
 
-    Busca cada pull antiguo (issue_id de LoCG) en los números de Metron de la
-    ventana por (nombre de serie, número, grupo). Si lo encuentra, le pone el
-    issue_id/series_id de Metron y refresca fecha y portada, así vuelve a
-    actualizarse solo. Nunca toca format ni status.
+    - Pulls antiguos de LoCG (issue_id de LoCG).
+    - Pulls añadidos desde un catálogo de previews (origin 'preview', sin
+      issue_id), en cuanto Metron publica ese número.
+
+    Los busca en los números de Metron de la ventana por (nombre de serie,
+    número, grupo). Si los encuentra, les pone el issue_id/series_id de Metron,
+    la fecha exacta y la portada, y marcan la fecha como confirmada. A partir de
+    ahí se refrescan solos. Nunca toca format ni status.
     """
     index: dict[tuple, list[dict]] = {}
     for i in issues:
@@ -90,13 +94,15 @@ def _adopt_locg_pulls(db: Client, issues: list[dict]) -> int:
 
     pulls = _select_all(
         db, "pulls",
-        "id, issue_id, issue_number, release_date, series(name, publishers(publisher_group))",
+        "id, issue_id, origin, issue_number, release_date, series(name, publishers(publisher_group))",
     )
     adopted = 0
     for p in pulls:
         old = p.get("issue_id")
-        if old is None or old >= METRON_OFFSET:
-            continue  # manual o ya de Metron
+        from_locg = old is not None and old < METRON_OFFSET
+        from_preview = old is None and p.get("origin") == "preview"
+        if not (from_locg or from_preview):
+            continue  # ya enlazado con Metron, o alta manual
         series = p.get("series") or {}
         group = (series.get("publishers") or {}).get("publisher_group")
         key = (_norm_name(series.get("name")), _norm_number(p["issue_number"]), group)
@@ -112,6 +118,7 @@ def _adopt_locg_pulls(db: Client, issues: list[dict]) -> int:
                 "series_id": best["series_id"],
                 "release_date": best["release_date"],
                 "cover_url": best["cover_url"],
+                "date_confirmed": True,
             }).eq("id", p["id"]).execute()
             adopted += 1
         except Exception as e:
@@ -187,9 +194,9 @@ def upsert_all(db: Client, issues: list[dict]) -> int:
     db.table("releases").delete().gt("release_date", str(window_end)).execute()
     db.table("releases").delete().gt("issue_id", 0).lt("issue_id", METRON_OFFSET).execute()
 
-    # 5. Adopción de pulls de LoCG (antes del refresco, para que entren en él)
-    adopted = _adopt_locg_pulls(db, issues)
-    print(f"  Pulls de LoCG adoptados en Metron: {adopted}", flush=True)
+    # 5. Enlace con Metron de pulls de LoCG y de previews (antes del refresco)
+    adopted = _adopt_pulls(db, issues)
+    print(f"  Pulls enlazados con Metron (de LoCG o de previews): {adopted}", flush=True)
 
     # 6. Refresco de pulls en ventana — solo fecha/portada/número, nunca format/status.
     # pulls es pequeña: se lee entera y se filtra en Python (un in_ con miles de

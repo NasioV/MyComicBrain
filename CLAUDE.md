@@ -142,6 +142,35 @@ Metron) se buscan en los números de Metron de la ventana por (nombre de serie n
 número, grupo). Si coinciden, se re-enlazan a Metron (`issue_id`, `series_id`, fecha,
 portada) y vuelven a refrescarse solos. Las series de LoCG que quedan sin pulls se borran.
 
+**Columnas añadidas en `pulls` (migración 005):**
+- `date_confirmed` (bool): `false` si el catálogo de previews solo daba el mes. Se guarda con
+  día 1 para que caiga en su mes, y el calendario lo muestra en el bloque **"Fecha por
+  confirmar"**. El automatismo `No salido → Descargar` ignora estos pulls.
+- `origin`: `catalogo` (New Releases) \| `manual` (alta manual) \| `preview` (Pull List).
+- `preview_id`: la preview de la que salió (si vino de la Pull List).
+
+### Tabla `previews` (catálogos de previews — Pull List)
+
+Números solicitados en los PDF de previews de las editoriales (DC Connect, Marvel PRH,
+Image). Da 2-3 meses de visión a futuro, más que Metron. La rellena la app al importar un
+PDF (se lee en el navegador, no se sube).
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | uuid PK | |
+| `publisher_id` | bigint FK → publishers | |
+| `item_key` | text | serie normalizada + número; UNIQUE con `publisher_id` (reimportar no duplica) |
+| `series_name` / `issue_number` / `title` | text | `title` tal cual en el catálogo |
+| `issue_type` | text | Regular Issue \| Annual \| Trade Paperback \| Hardcover |
+| `release_date` | date NULL | exacta si el catálogo la trae |
+| `release_month` | date | primer día del mes de salida |
+| `price` | numeric | |
+| `catalog` | text | nombre del PDF |
+
+**Enlace con Metron:** los pulls de origen `preview` se buscan en los números de Metron de la
+ventana (serie + número + grupo, igual que la adopción de LoCG). Al encontrarlos se les pone
+`issue_id`, serie de Metron, fecha exacta, portada y `date_confirmed = true`.
+
 ### Tabla `sync_log` (estado del sync)
 
 | Campo | Tipo | Notas |
@@ -220,7 +249,21 @@ que ya no están en `releases`. **No depende del scraper.**
   desde un desplegable** (tabla `publishers`).
 - Metes número, fecha y formato. Se crea un `pulls` autosuficiente (`issue_id` NULL).
 
-### 4.4 Login (v1)
+### 4.4 Pull List — catálogos de previews
+
+Planificación a 2-3 meses vista, a partir de los PDF de previews.
+
+- **Importar catálogo:** se elige el PDF en la app; pdf.js lo lee en el dispositivo (no se
+  sube; el de Image pesa 266 MB y Supabase free admite 50 MB/archivo). Hay un extractor por
+  formato (`frontend/src/app/core/catalog/catalog-parser.ts`: DC Connect, Marvel PRH, Image).
+  Lo extraído se **revisa y corrige** en una tabla antes de guardarse en `previews`.
+- **Vista por mes:** agrupada por semanas + bloque "Fecha por confirmar"; filtros de editorial,
+  tipo y búsqueda; botones **Digital / Físico** que crean el pull (estado inicial por la regla
+  habitual) y lo llevan al calendario.
+- **Totales del mes** de lo marcado: físico, digital y total (en $, como el catálogo).
+- Otras editoriales necesitan su propio extractor (hace falta un PDF de ejemplo).
+
+### 4.5 Login (v1)
 
 - Supabase Auth.
 - **Registro público desactivado.** Las cuentas (1, máx. 2) se crean a mano.

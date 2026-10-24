@@ -1,0 +1,153 @@
+<div class="pl-page">
+  <div class="pl-head">
+    <div>
+      <h2 class="pl-title">Pull List</h2>
+      <p class="pl-sub">Lo solicitado en los catálogos de las editoriales, para planificar con antelación.</p>
+    </div>
+    <button class="btn-import" (click)="openImport()">⇪ Importar catálogo</button>
+  </div>
+
+  @if (message()) {
+    <div class="pl-msg">{{ message() }} <button (click)="message.set('')">×</button></div>
+  }
+
+  @if (months().length === 0 && !loading()) {
+    <div class="state-msg">
+      Todavía no has importado ningún catálogo.<br />
+      Pulsa <strong>Importar catálogo</strong> y elige el PDF de previews de DC, Marvel o Image.
+    </div>
+  } @else {
+    <div class="pl-toolbar">
+      <div class="month-nav">
+        <button (click)="prevMonth()" [disabled]="monthIndex() <= 0">‹</button>
+        <span class="month-label">{{ monthLabel() }}</span>
+        <button (click)="nextMonth()" [disabled]="monthIndex() >= months().length - 1">›</button>
+      </div>
+
+      <input class="search-input" type="search" placeholder="Buscar serie…"
+        [value]="search()" (input)="search.set($any($event.target).value)" />
+
+      <select class="pub-filter" [value]="publisher()" (change)="publisher.set($any($event.target).value)">
+        <option value="">Todas las editoriales</option>
+        @for (p of publishers(); track p) { <option [value]="p">{{ p }}</option> }
+      </select>
+    </div>
+
+    <div class="type-filter-row">
+      @for (t of issueTypes; track t) {
+        <button class="type-pill" [class.active]="activeTypes().has(t)" (click)="toggleType(t)">{{ t }}</button>
+      }
+    </div>
+
+    <div class="totals">
+      <div class="tot"><span>Físico</span><strong>{{ money(totals().fisico) }}</strong></div>
+      <div class="tot"><span>Digital</span><strong>{{ money(totals().digital) }}</strong></div>
+      <div class="tot tot-main"><span>Total del mes</span><strong>{{ money(totals().total) }}</strong></div>
+      <div class="tot-note">
+        {{ totals().count }} en tu lista
+        @if (totals().noPrice) { · {{ totals().noPrice }} sin precio }
+      </div>
+    </div>
+
+    @if (loading()) {
+      <div class="state-msg">Cargando…</div>
+    } @else if (filtered().length === 0) {
+      <div class="state-msg">Nada que mostrar con estos filtros.</div>
+    } @else {
+      @for (w of weeks(); track w.key) {
+        <h3 class="week-head">{{ w.label }}</h3>
+        <div class="rows">
+          @for (p of w.items; track p.id) {
+            <div class="row" [class.added]="inList().has(p.id)">
+              <div class="row-main">
+                <span class="row-title">{{ p.series_name }}@if (p.issue_number) { <b> #{{ p.issue_number }}</b> }</span>
+                <span class="row-meta">
+                  {{ p.publishers.name }} · {{ dateLabel(p) }}
+                  @if (p.issue_type !== 'Regular Issue') { · {{ p.issue_type }} }
+                </span>
+              </div>
+              <span class="row-price">{{ money(p.price) }}</span>
+              <div class="row-actions">
+                @if (inList().get(p.id); as fmt) {
+                  <span class="in-list" [class.fisico]="fmt === 'fisico'">✓ {{ fmt === 'fisico' ? 'Físico' : 'Digital' }}</span>
+                } @else {
+                  <button class="btn-fmt btn-digital" [disabled]="busyId() === p.id" (click)="add(p, 'digital')">Digital</button>
+                  <button class="btn-fmt btn-fisico" [disabled]="busyId() === p.id" (click)="add(p, 'fisico')">Físico</button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  }
+</div>
+
+<!-- ── Importar catálogo ───────────────────────────────────────────────── -->
+@if (importOpen()) {
+  <div class="modal-overlay" (click)="closeImport()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h3>Importar catálogo</h3>
+        <button class="modal-x" (click)="closeImport()">×</button>
+      </div>
+
+      @if (!parsed()) {
+        <p class="modal-text">
+          Elige el PDF de previews (DC Connect, Marvel o Image). Se lee <strong>en tu dispositivo</strong>,
+          no se sube a ningún sitio. Con catálogos grandes, mejor desde el ordenador.
+        </p>
+        <label class="file-drop" [class.busy]="importing()">
+          <input type="file" accept="application/pdf,.pdf" [disabled]="importing()"
+            (change)="onFile($any($event.target))" />
+          {{ importing() ? (progress() || 'Abriendo PDF…') : 'Seleccionar PDF' }}
+        </label>
+      } @else {
+        <p class="modal-text">
+          <strong>{{ parsed()!.publisher }}</strong> · {{ review().length }} cómics detectados.
+          Revisa y corrige lo que haga falta; solo se guardan los marcados.
+        </p>
+        <div class="review-tools">
+          <button (click)="setAll(true)">Marcar todos</button>
+          <button (click)="setAll(false)">Desmarcar todos</button>
+          <span>{{ selectedCount() }} seleccionados</span>
+        </div>
+        <div class="review-wrap">
+          <table class="review">
+            <thead>
+              <tr><th></th><th>Serie</th><th>#</th><th>Fecha</th><th>Precio</th><th>Tipo</th></tr>
+            </thead>
+            <tbody>
+              @for (it of review(); track $index; let i = $index) {
+                <tr [class.off]="!it.selected">
+                  <td><input type="checkbox" [checked]="it.selected" (change)="toggleItem(i)" /></td>
+                  <td><input class="in-series" [value]="it.seriesName" (change)="editItem(i, 'seriesName', $any($event.target).value)" /></td>
+                  <td><input class="in-num" [value]="it.issueNumber" (change)="editItem(i, 'issueNumber', $any($event.target).value)" /></td>
+                  <td>
+                    <input class="in-date" type="date" [value]="it.releaseDate ?? ''"
+                      (change)="editItem(i, 'releaseDate', $any($event.target).value)" />
+                    @if (!it.releaseDate) { <small>por confirmar</small> }
+                  </td>
+                  <td><input class="in-price" type="number" step="0.01" [value]="it.price ?? ''"
+                      (change)="editItem(i, 'price', $any($event.target).value)" /></td>
+                  <td class="cell-type">{{ it.issueType }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (importError()) { <p class="err">{{ importError() }}</p> }
+
+      @if (parsed()) {
+        <div class="modal-actions">
+          <button class="btn-ghost" (click)="parsed.set(null)" [disabled]="saving()">Elegir otro PDF</button>
+          <button class="btn-primary" (click)="saveImport()" [disabled]="saving() || selectedCount() === 0">
+            {{ saving() ? 'Guardando…' : 'Guardar ' + selectedCount() }}
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+}

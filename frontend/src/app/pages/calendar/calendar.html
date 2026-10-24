@@ -52,7 +52,7 @@
             </button>
             <div class="card-info">
               <p class="card-series">{{ pull.series.name }}</p>
-              <p class="card-meta">{{ formatDate(pull.release_date) }}</p>
+              <p class="card-meta">{{ pull.date_confirmed === false ? 'Por confirmar' : formatDate(pull.release_date) }}</p>
               @if (showPublisher()) { <p class="card-pub">{{ pull.series.publishers.name }}</p> }
               <select class="card-status" (change)="changeStatus(pull, $any($event.target).value)">
                 @for (opt of STATUS_OPTIONS; track opt) {
@@ -88,7 +88,7 @@
               @if (showPublisher()) {
                 <td class="col-pub">{{ pull.series.publishers.name }}</td>
               }
-              <td class="col-date">{{ formatDate(pull.release_date) }}</td>
+              <td class="col-date">{{ pull.date_confirmed === false ? 'Por confirmar' : formatDate(pull.release_date) }}</td>
               <td class="col-fmt">
                 <button class="fmt-pill" [class.fmt-digital]="pull.format === 'digital'" [class.fmt-fisico]="pull.format === 'fisico'"
                   (click)="changeFormat(pull)" title="Cambiar formato">
