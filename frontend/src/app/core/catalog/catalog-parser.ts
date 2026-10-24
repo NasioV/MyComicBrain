@@ -404,6 +404,31 @@ function parseMarvel(pages: string[][]): CatalogParseResult {
     });
   }
 
+  // 2b) Fichas con diseño especial (p. ej. la línea "Midnight"): el título es un
+  // logo (imagen), el precio va como "32 PAGES $4.99 US" y los créditos con letras
+  // espaciadas ("C O V E R B Y" / "DIKE RUAN"). Se enlazan con la galería de
+  // portadas ("MIDNIGHT X-MEN #" + "4 A DIKE RUAN (REGULAR)") por el portadista.
+  const gallery: { title: string; artist: string }[] = [];
+  for (const lines of pages) {
+    lines.forEach((l, i) => {
+      const t = l.match(/^(.+?)\s*#$/);
+      const r = (lines[i + 1] ?? '').match(/^(\d+)\s+A\s+(.+?)\s+\(REGULAR\)$/);
+      if (t && r) gallery.push({ title: `${t[1]} #${r[1]}`, artist: r[2].trim() });
+    });
+  }
+  const priceByCoverArtist = new Map<string, number>();
+  for (const lines of pages) {
+    const pm = lines.map(l => l.match(/\d+ PAGES \$(\d+\.\d{2}) US/)).find(Boolean);
+    const ci = lines.findIndex(l => l.replace(/\s+/g, '') === 'COVERBY');
+    if (pm && ci >= 0 && lines[ci + 1]) priceByCoverArtist.set(normTitle(lines[ci + 1]), Number(pm[1]));
+  }
+  for (const g of gallery) {
+    const price = priceByCoverArtist.get(normTitle(g.artist));
+    if (price === undefined) continue;
+    const date = dated.get(itemKey(splitTitle(g.title))) ?? null;
+    items.push(makeItem('Marvel Comics', g.title, date, catalogMonth, price));
+  }
+
   // 3) Checklist de recopilatorios: "VENOM VOL. 2: COMING TO TERMS TPB (ON SALE 02/24/27)"
   for (const lines of pages) {
     if (!lines.some(l => /^COLLECTIONS$/.test(l))) continue;
