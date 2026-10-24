@@ -40,11 +40,9 @@
     </div>
 
     <div class="totals">
-      <div class="tot"><span>Físico</span><strong>{{ money(totals().fisico) }}</strong></div>
-      <div class="tot"><span>Digital</span><strong>{{ money(totals().digital) }}</strong></div>
-      <div class="tot tot-main"><span>Total del mes</span><strong>{{ money(totals().total) }}</strong></div>
+      <div class="tot tot-main"><span>Gasto del mes (físico)</span><strong>{{ money(totals().fisico) }}</strong></div>
       <div class="tot-note">
-        {{ totals().count }} en tu lista
+        {{ totals().count }} en físico
         @if (totals().noPrice) { · {{ totals().noPrice }} sin precio }
       </div>
     </div>
@@ -66,7 +64,9 @@
                   @if (p.issue_type !== 'Regular Issue') { · {{ p.issue_type }} }
                 </span>
               </div>
-              <span class="row-price">{{ money(p.price) }}</span>
+              @if (inList().get(p.id) !== 'digital') {
+                <span class="row-price">{{ money(p.price) }}</span>
+              }
               <div class="row-actions">
                 @if (inList().get(p.id); as fmt) {
                   <span class="in-list" [class.fisico]="fmt === 'fisico'">✓ {{ fmt === 'fisico' ? 'Físico' : 'Digital' }}</span>

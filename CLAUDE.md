@@ -260,7 +260,7 @@ Planificación a 2-3 meses vista, a partir de los PDF de previews.
 - **Vista por mes:** agrupada por semanas + bloque "Fecha por confirmar"; filtros de editorial,
   tipo y búsqueda; botones **Digital / Físico** que crean el pull (estado inicial por la regla
   habitual) y lo llevan al calendario.
-- **Totales del mes** de lo marcado: físico, digital y total (en $, como el catálogo).
+- **Gasto del mes**: solo lo marcado en físico, en **€** (en la tienda del usuario el precio en $ del catálogo se cobra igual en €). El digital no muestra precio.
 - Otras editoriales necesitan su propio extractor (hace falta un PDF de ejemplo).
 
 ### 4.5 Login (v1)

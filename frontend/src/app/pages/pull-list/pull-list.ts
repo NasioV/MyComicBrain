@@ -70,18 +70,17 @@ export class PullList implements OnInit {
       }));
   });
 
-  /** Totales del mes de lo que ya está en mi lista (todas las editoriales y tipos). */
+  /** Gasto del mes: solo lo marcado en físico (lo que se compra en tienda). */
   totals = computed(() => {
     const inList = this.inList();
-    let fisico = 0, digital = 0, count = 0, noPrice = 0;
+    let fisico = 0, count = 0, noPrice = 0;
     for (const p of this.previews()) {
-      const fmt = inList.get(p.id);
-      if (!fmt) continue;
+      if (inList.get(p.id) !== 'fisico') continue;
       count++;
-      if (p.price === null) { noPrice++; continue; }
-      if (fmt === 'fisico') fisico += Number(p.price); else digital += Number(p.price);
+      if (p.price === null) noPrice++;
+      else fisico += Number(p.price);
     }
-    return { fisico, digital, total: fisico + digital, count, noPrice };
+    return { fisico, count, noPrice };
   });
 
   async ngOnInit() {
@@ -145,8 +144,9 @@ export class PullList implements OnInit {
     return `${d}/${m}`;
   }
 
+  /** En la tienda el precio en $ del catálogo se cobra igual en € (4,99 $ → 4,99 €). */
   money(n: number | null): string {
-    return n === null ? '—' : `$${Number(n).toFixed(2)}`;
+    return n === null ? '—' : Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
   }
 
   // ── Importar catálogo ────────────────────────────────────────────────────
